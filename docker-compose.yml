@@ -1,0 +1,54 @@
+name: codex
+
+services:
+  postgres:
+    container_name: codex-postgres
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-garaj}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-garaj}
+    volumes:
+      - postgres_data_v2:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-garaj} -d ${POSTGRES_DB:-garaj}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    container_name: garaj
+    build: .
+    command: ["sh", "-c", "npx prisma db push && npm run start -- -p 5001"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-garaj}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-garaj}?schema=public
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5001}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "5001:5001"
+    volumes:
+      - uploads_data:/app/uploads
+
+  worker:
+    container_name: codex-worker
+    build: .
+    command: ["npm", "run", "worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-garaj}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-garaj}?schema=public
+    volumes:
+      - uploads_data:/app/uploads
+
+volumes:
+  postgres_data_v2:
+    external: true
+    name: garaj_postgres_data_v2
+  uploads_data:
+    external: true
+    name: garaj_uploads_data

@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+}
+
+enum FuelType {
+  ELECTRIC
+  DIESEL
+  GPL
+  PETROL
+  HYBRID
+}
+
+enum DocumentType {
+  ITP
+  RCA
+  CASCO
+  ROVINIETA
+  FIRST_AID_KIT
+  FIRE_EXTINGUISHER
+  WARRANTY
+  CAR_LOAN
+  CASCO_RATE
+  DRIVER_LICENSE
+  ID_CARD
+}
+
+enum ExpenseCategory {
+  SERVICE
+  FUEL
+  CHARGING
+  CAR_WASH
+  PARKING
+  ACCESSORIES
+  REPAIR
+  SUBSCRIPTION
+  OTHER
+}
+
+enum TireType {
+  SUMMER
+  WINTER
+  ALL_SEASON
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  DISMISSED
+}
+
+enum PaymentFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+enum PaymentPlanCategory {
+  CAR_CREDIT
+  CASCO
+  RCA
+  LEASING
+  EXTENDED_WARRANTY
+  SUBSCRIPTION
+  OTHER
+}
+
+enum PaymentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentInstallmentStatus {
+  PAID
+  UNPAID
+  CANCELLED
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  profileImageUrl String?
+  role            Role      @default(DRIVER)
+  licenseCategory String?
+  licenseIssuedAt DateTime?
+  licenseExpiresAt DateTime?
+  idCardIssuedAt  DateTime?
+  idCardExpiresAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  vehicles        Vehicle[] @relation("VehicleDriver")
+  createdVehicles Vehicle[] @relation("VehicleCreator")
+}
+
+model Vehicle {
+  id                    String    @id @default(cuid())
+  plateNumber           String    @unique
+  make                  String
+  model                 String
+  vin                   String?
+  civSeries             String?
+  registrationSeries    String?
+  engineCapacityCc      Int?
+  powerKw               Int?
+  color                 String?
+  totalMassKg           Int?
+  fuelType              FuelType?
+  seats                 Int?
+  manufacturingYear     Int?
+  warrantyUntil         DateTime?
+  acquisitionPrice      Decimal?  @db.Decimal(12, 2)
+  notes                 String?
+  imageUrl              String?
+  backgroundImageUrl    String?
+  driverId              String?
+  createdById           String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  driver                User?     @relation("VehicleDriver", fields: [driverId], references: [id])
+  createdBy             User      @relation("VehicleCreator", fields: [createdById], references: [id])
+  documents             VehicleDocument[]
+  reminders             Reminder[]
+  expenses              Expense[]
+  paymentPlans          PaymentPlan[]
+  services              ServiceRecord[]
+  tires                 TireSet[]
+}
+
+model VehicleDocument {
+  id             String       @id @default(cuid())
+  vehicleId      String
+  type           DocumentType
+  issuedAt       DateTime?
+  validityMonths Int?
+  paymentFrequency PaymentFrequency?
+  validUntil     DateTime
+  cost           Decimal?     @db.Decimal(12, 2)
+  reminderDays   Int[]        @default([30, 7, 3, 1])
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reminders      Reminder[]
+
+  @@index([vehicleId, type])
+}
+
+model Reminder {
+  id          String         @id @default(cuid())
+  vehicleId   String
+  documentId  String?
+  title       String
+  dueAt       DateTime
+  notifyAt    DateTime
+  status      ReminderStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  vehicle     Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  document    VehicleDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  vehicleId   String
+  category    ExpenseCategory
+  amount      Decimal         @db.Decimal(12, 2)
+  occurredAt  DateTime
+  odometerKm  Int?
+  notes       String?
+  createdAt   DateTime        @default(now())
+
+  vehicle     Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+model PaymentPlan {
+  id                 String            @id @default(cuid())
+  vehicleId          String
+  name               String
+  category           PaymentPlanCategory
+  totalAmount        Decimal           @db.Decimal(12, 2)
+  installmentAmount  Decimal           @db.Decimal(12, 2)
+  totalInstallments  Int
+  frequency          PaymentFrequency
+  firstPaymentDate   DateTime
+  status             PaymentPlanStatus @default(ACTIVE)
+  currency           String            @default("RON")
+  reminderDays       Int               @default(7)
+  notes              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  vehicle            Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  installments       PaymentInstallment[]
+
+  @@index([vehicleId, status])
+}
+
+model PaymentInstallment {
+  id                 String                   @id @default(cuid())
+  paymentPlanId      String
+  installmentNumber  Int
+  dueDate            DateTime
+  amount             Decimal                  @db.Decimal(12, 2)
+  currency           String                   @default("RON")
+  status             PaymentInstallmentStatus @default(UNPAID)
+  paidDate           DateTime?
+  notes              String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  paymentPlan        PaymentPlan              @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentPlanId, installmentNumber])
+  @@index([paymentPlanId, status, dueDate])
+}
+
+model ServiceRecord {
+  id          String    @id @default(cuid())
+  vehicleId   String
+  servicedAt  DateTime
+  odometerKm  Int?
+  cost        Decimal   @db.Decimal(12, 2)
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+model TireSet {
+  id          String    @id @default(cuid())
+  vehicleId   String
+  type        TireType
+  brand       String
+  model       String?
+  size        String
+  cost        Decimal?  @db.Decimal(12, 2)
+  purchasedAt DateTime
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+model AppSetting {
+  id               String   @id @default(cuid())
+  theme            String   @default("system")
+  telegramBotToken String?
+  telegramChatId   String?
+  smtpHost         String?
+  smtpPort         Int?
+  smtpUser         String?
+  smtpPassword     String?
+  smtpFrom         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

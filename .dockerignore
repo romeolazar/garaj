@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+.git
+uploads
+*.log
+garaj.json
+garaj-export*.json
+garaj-export*.csv
+*export*.json
+*export*.csv
+bettershot_*.png

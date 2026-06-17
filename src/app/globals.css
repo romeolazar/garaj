@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 38% 7%;
+  --foreground: 210 40% 98%;
+  --card: 222 31% 10%;
+  --card-foreground: 210 40% 98%;
+  --muted: 223 24% 16%;
+  --muted-foreground: 226 13% 62%;
+  --border: 224 24% 18%;
+  --primary: 204 96% 53%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 162 84% 44%;
+  --accent-foreground: 0 0% 100%;
+  --danger: 0 84% 60%;
+}
+
+.light {
+  --background: 210 30% 98%;
+  --foreground: 224 24% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 24% 12%;
+  --muted: 214 28% 93%;
+  --muted-foreground: 220 10% 42%;
+  --border: 214 22% 86%;
+  --primary: 204 96% 45%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 162 84% 36%;
+  --accent-foreground: 0 0% 100%;
+  --danger: 0 84% 55%;
+}
+
+@media (prefers-color-scheme: light) {
+  .system {
+    --background: 210 30% 98%;
+    --foreground: 224 24% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 24% 12%;
+    --muted: 214 28% 93%;
+    --muted-foreground: 220 10% 42%;
+    --border: 214 22% 86%;
+    --primary: 204 96% 45%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 162 84% 36%;
+    --accent-foreground: 0 0% 100%;
+    --danger: 0 84% 55%;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+input,
+select,
+textarea {
+  color-scheme: dark;
+}
+
+.light input,
+.light select,
+.light textarea,
+.system input,
+.system select,
+.system textarea {
+  color-scheme: light;
+}
+
+.field {
+  @apply w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary;
+}
+
+.label {
+  @apply mb-2 block text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+}
+
+.btn {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:brightness-110;
+}
+
+.btn-secondary {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-muted px-4 text-sm font-semibold text-foreground transition hover:border-primary;
+}
+
+.panel {
+  @apply rounded-lg border border-border bg-card;
+}
