@@ -1,100 +1,169 @@
-Numele aplicatiei: garaj
+# Garaj
 
-## Rulare locala
+Garaj este o aplicatie web pentru administrarea masinilor personale: registru documente, cheltuieli, rate recurente, soferi, notificari si rapoarte.
 
-Aplicatia nu include parole, token-uri sau date reale in repository. Pentru rulare locala:
+Aplicatia este publicata si ca imagine Docker:
+
+```bash
+docker pull romeolazar/garaj:latest
+```
+
+## Deploy Cu Docker Compose
+
+Ai nevoie de Docker si Docker Compose.
+
+1. Creeaza un folder pentru deploy:
+
+```bash
+mkdir garaj
+cd garaj
+```
+
+2. Creeaza fisierul `.env`:
+
+```env
+POSTGRES_USER=garaj
+POSTGRES_PASSWORD=schimba-cu-o-parola-puternica
+POSTGRES_DB=garaj
+NEXTAUTH_URL=http://localhost:5001
+NEXTAUTH_SECRET=schimba-cu-un-secret-lung-random
+```
+
+Pentru `NEXTAUTH_SECRET`, foloseste o valoare lunga si random, de exemplu generata cu:
+
+```bash
+openssl rand -base64 32
+```
+
+3. Creeaza fisierul `compose.yaml`:
+
+```yaml
+name: garaj
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: garaj-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-garaj}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-garaj}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-garaj} -d ${POSTGRES_DB:-garaj}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: romeolazar/garaj:latest
+    container_name: garaj
+    restart: unless-stopped
+    command: ["sh", "-c", "npx prisma db push && npm run start -- -p 5001"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-garaj}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-garaj}?schema=public
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5001}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "5001:5001"
+    volumes:
+      - uploads_data:/app/uploads
+
+volumes:
+  postgres_data:
+  uploads_data:
+```
+
+4. Porneste aplicatia:
+
+```bash
+docker compose up -d
+```
+
+5. Deschide aplicatia:
+
+```text
+http://localhost:5001
+```
+
+La prima accesare, aplicatia te trimite la `/setup`, unde creezi contul initial de administrator.
+
+## Update
+
+Pentru actualizarea aplicatiei la ultima imagine publicata:
+
+```bash
+docker compose pull app
+docker compose up -d
+```
+
+## Backup
+
+Exportul datelor se poate face din aplicatie, in `Setari -> Export / Import`.
+
+Pentru backup complet al bazei PostgreSQL:
+
+```bash
+docker compose exec postgres pg_dump -U garaj garaj > garaj-backup.sql
+```
+
+Pentru restaurare:
+
+```bash
+docker compose exec -T postgres psql -U garaj garaj < garaj-backup.sql
+```
+
+## Rulare Locala Pentru Dezvoltare
+
+Aplicatia nu include parole, token-uri sau date reale in repository.
 
 1. Copiaza `.env.example` in `.env`.
 2. Inlocuieste valorile placeholder pentru `POSTGRES_PASSWORD` si `NEXTAUTH_SECRET`.
-3. Porneste aplicatia cu Docker Compose:
+3. Porneste stack-ul local:
 
 ```bash
 docker compose up -d --build
 ```
 
-La prima accesare, aplicatia deschide pagina `/setup`, unde se creeaza contul initial de administrator.
-
 Seed-ul demo este optional. Ruleaza `npm run prisma:seed` doar daca ai setat explicit `SEED_ADMIN_PASSWORD` in mediul local.
 
-Descriere: Aplicatia functioneaza precum un asistent personal si reprezinta un instrument extrem de util proprietariilor de masini din Romania.
-Este simplu de utilizat, trebuie doar introduse datele masinii si aplicatia va trimite notificari din timp atunci cand urmeaza sa expire:
-- Autorizatia ITP
-- RCA
-- CASCO
-- Rovinieta
-- Trusa Medicala
-- Extinctor
+## Functionalitati
 
-Daca ai de platit rate la masina, aplicatia iti va aminti si cand e termenul de plata.
+- Panou principal cu masini, costuri, registru si activitate recenta.
+- Registru pentru ITP, RCA, CASCO, rovinieta, extinctor si trusa medicala.
+- Cheltuieli pe masina, inclusiv kilometraj si note.
+- Rate recurente pentru credit auto, CASCO, RCA, leasing sau alte obligatii.
+- Soferi cu roluri: administrator si sofer.
+- Acces limitat pentru sofer la masina alocata.
+- Profil sofer cu permis si memento CI.
+- Notificari Telegram si email prin Gmail SMTP.
+- Export si import JSON.
+- Rapoarte pe baza datelor introduse.
 
-Workflow:
+## Configurare Notificari
 
-Aplicatia la prima accesare te va invita sa iti faci un cont.
-Acesta va fi contul de administrator, care va permite sa se stearga sau sa se adauge utilizatori.
-Daca se introduc mai multe masini, se pot aloca soferi, iar acesta poate avea contului cu masina alocata de administrato. El va putea vedea toate informatii vehiculului alocat.
+Telegram:
 
-Dupa setarea contului de admin, se adauga vehicul.
-La introducere se vor cere urmatoarele date:
-- Nr. inmatriculare
-- Marca, Model. Aici daca exita o baza de date cu toate modele se poate implenta, daca nu utilizatorul va introduce manual Marca si modelul.
-- Nr. Identificare
-- Serie CIV
-- Serie Certificat de inmatriculare
-- Capacitate cilindrica
-- Putere (kW dar si conversie in CP)
-- Culoare
-- Masa totala
-- Combustibil (Electric, Diesel, GPL, Benzina, Hyrid)
-- Nr. locuri
-- An de fabricatie
-- Garantie.
-- Nota, unde sa se poate trece nivelul de dotari a masinii, sau alte specificatii.
-- Imagine png/jpg fie cu masina fie cu logo-ul masinii.
-- ITP (Se afiseaza un calendar dar si posibilitatea introducerii manuale a datei. Poate fi si o selectie de tip roll pe zi/luna/an ca pe iPhone). Se va introduce si se va mentiona sa se introduca urmatoarea inspectie technica. se va selecta un reminder predefinit cu 30,7,3,1 zi inainte.
-- RCA, valabil pana la: (Se afiseaza un calendar dar si posibilitatea introducerii manuale a datei. Poate fi si o selectie de tip roll pe zi/luna/an ca pe iPhone). Se va introduce si se va mentiona sa se introduca urmatoarea inspectie technica. se va selecta un reminder predefinit cu 30,7,3,1 zi inainte.
-- CASCO (aceeasi logica)
-- Rovinieta
-- Extinctor
-- Trusa medicala
-- Rata Masina (lunar, trimestrial, semestrial)
-- Rata Casco (luna, trimestrial, semestrial, anual)
-- Pret de achizitie, pentru vehicul nou.
+- seteaza `Telegram bot token`
+- seteaza `Telegram chat ID`
+- foloseste butonul de test din Setari
 
-Astea sunt datele masinii si se vor crea automat Mementouri/reminder care vor aparea in dashboard.
+Email:
 
-Dupa care pe fiecare masina se pot adauga si contoriza:
+- aplicatia foloseste Gmail SMTP
+- seteaza utilizatorul Gmail
+- seteaza o App Password Gmail
+- foloseste butonul de test din Setari
 
-- Revizii. (data, kilometraj, cost.) Un camp de nota in care se vor trece operatiile facute de service. Se va adauga si un memento de la ultima revizie. Ele sunt anuale.
-- Alte cheltuieli (Se vor face diverse). Alimentare, Incarcare, Spalatorie, Parcare, Accesorii, Reparatii infara reviziei, Subscriptii).
-- Anvelope (tip, marca, model, dimensiuni, cost,) ca data vom trece data achizitiei si cat timp a trecut de la achizite.
+## Note De Securitate
 
-In dashboard vreau Numarul de Masini, Urmtorul memento, cel mai aproape.
-Activitate recenta
-Total cheltuieli pe masina.
-
-Important:
-
-Unele masini au istoric, unele sunt noi, deci trebuie sa existe si posibilitatea adaugarii in trecut, pentru a putea cuantifica toate costurile.
-tot in dashboard, vreau total cost revizii.
-
-La setarile utilizatorului, vreau:
-nume, prenume, poza de profil.
-Permis: categorie, data obtinere, data expirare.
-CI: data obtinere, data expirare
-
-La setari vreau:
-
-- Modul Dark/Light/System
-- Telegram notification: Add telegram bot and chatid:
-- Email notification. smtp (usuallyu google)
-- Data export (Download JSON, csv)
-- Import csv based on Data Export CSV.
-
-Orice altceva ce consideri util.
-
-- Next step va fi implementarea consumului cu grafice si statistici.
-
-Implementare:
-
-- docker app with docker compose:
-- latest technology for a better look with icons.
+- Nu publica fisierul `.env`.
+- Schimba mereu `POSTGRES_PASSWORD` si `NEXTAUTH_SECRET` in productie.
+- Pentru deploy public, seteaza `NEXTAUTH_URL` la URL-ul real al aplicatiei.
+- Datele reale introduse in aplicatie raman in volumul PostgreSQL, nu in imaginea Docker.

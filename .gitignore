@@ -8,6 +8,7 @@ dist
 coverage
 uploads
 *.log
+.DS_Store
 garaj.json
 garaj-export*.json
 garaj-export*.csv

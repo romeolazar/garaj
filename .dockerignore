@@ -6,6 +6,7 @@ node_modules
 .git
 uploads
 *.log
+.DS_Store
 garaj.json
 garaj-export*.json
 garaj-export*.csv
