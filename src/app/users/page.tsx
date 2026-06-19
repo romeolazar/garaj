@@ -13,12 +13,21 @@ import { roleLabels } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
-export default async function UsersPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ view?: string; error?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
   if (session.user.role !== "ADMIN") redirect("/");
-  const { view: rawView } = await searchParams;
+  const { view: rawView, error } = await searchParams;
   const view = rawView === "list" ? "list" : "card";
+
+  let errorMessage = "";
+  if (error === "email-exists") {
+    errorMessage = "Această adresă de email este deja folosită de un alt utilizator.";
+  } else if (error === "password-mismatch") {
+    errorMessage = "Parolele introduse nu se potrivesc.";
+  } else if (error === "invalid") {
+    errorMessage = "Datele introduse sunt invalide sau parola este prea scurtă (minim 8 caractere).";
+  }
 
   const users = await prisma.user.findMany({
     orderBy: [{ role: "asc" }, { firstName: "asc" }],
@@ -27,6 +36,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
   return (
     <AppShell>
+      {errorMessage && (
+        <div className="mb-6 rounded-md bg-rose-500/10 p-3 text-sm text-rose-400 border border-rose-500/20">
+          {errorMessage}
+        </div>
+      )}
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <h1 className="flex items-center gap-3 text-4xl font-black"><UserCog className="size-9 text-primary" /> Lista Șoferi</h1>
@@ -43,6 +57,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               <label><span className="label">Nume</span><input className="field" name="lastName" required /></label>
               <label><span className="label">Email</span><input className="field" name="email" type="email" required /></label>
               <label><span className="label">Parola initiala</span><input className="field" name="password" type="password" minLength={8} required /></label>
+              <label><span className="label">Confirma parola</span><input className="field" name="confirmPassword" type="password" minLength={8} required /></label>
               <label>
                 <span className="label">Rol</span>
                 <select className="field" name="role" defaultValue={Role.DRIVER}>
@@ -97,41 +112,57 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
         ) : (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {users.map((user) => (
-              <div key={user.id} className="group relative overflow-hidden rounded-lg border border-border bg-card p-5 shadow-lg transition hover:border-primary">
-                <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-primary/35 via-accent/20 to-transparent" />
-                <div className="relative z-10 flex items-start gap-4 pr-16">
-                  {user.profileImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.profileImageUrl} alt="" className="size-16 rounded-lg border border-border bg-muted object-cover shadow" />
-                  ) : (
-                    <div className="flex size-16 items-center justify-center rounded-lg bg-primary text-xl font-black text-primary-foreground shadow">
-                      {userInitials(user)}
-                    </div>
+              <div key={user.id} className="panel group relative p-5 transition hover:border-primary/60 bg-gradient-to-tr from-rose-500/5 via-card to-primary/5 overflow-hidden">
+                {/* Flag / Header of license */}
+                <div className="absolute top-4 right-4 flex items-center gap-2 select-none">
+                  <div className="flex flex-col items-center justify-center w-5 h-3.5 rounded-sm bg-blue-600 text-white text-[6px] font-black leading-none">
+                    <span>★</span>
+                    <span className="text-[5px] -mt-0.5">RO</span>
+                  </div>
+                  {user.licenseCategory && (
+                    <span className="px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-black tracking-wider shadow border border-background">
+                      Cat. {user.licenseCategory}
+                    </span>
                   )}
-                  <div className="min-w-0 pt-1">
-                    <div className="text-xl font-black">{user.firstName} {user.lastName}</div>
-                    <div className="truncate text-sm text-muted-foreground">{user.email}</div>
-                  </div>
                 </div>
-                <div className="relative z-10 mt-6 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <div className="text-xs uppercase text-muted-foreground">Categorie permis</div>
-                    <div className="mt-1 font-bold">{user.licenseCategory || "N/A"}</div>
+
+                <Link href={`/users/${user.id}/edit`} className="block">
+                  <div className="flex gap-4 items-center mt-2">
+                    {/* Profile Picture */}
+                    {user.profileImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={user.profileImageUrl} alt="" className="size-16 rounded-lg border border-border/80 object-cover bg-muted/40 shadow-sm" />
+                    ) : (
+                      <div className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 text-muted-foreground font-black text-xl shadow-sm">
+                        {userInitials(user)}
+                      </div>
+                    )}
+
+                    {/* Driver Name & Email */}
+                    <div className="min-w-0 flex-1 pt-1">
+                      <div className="text-lg font-black text-foreground tracking-tight truncate leading-tight">{user.firstName} {user.lastName}</div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</div>
+                    </div>
                   </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <div className="text-xs uppercase text-muted-foreground">Permis expiră</div>
-                    <div className="mt-1 font-bold">{formatDate(user.licenseExpiresAt)}</div>
+
+                  {/* Highlights Grid */}
+                  <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-md border border-border bg-muted/20 p-2.5">
+                      <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold leading-none">Valabilitate Permis</div>
+                      <div className="mt-1.5 font-black text-foreground">
+                        {user.licenseExpiresAt ? formatDate(user.licenseExpiresAt) : "Fara permis"}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-border bg-muted/20 p-2.5">
+                      <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold leading-none">Numar Auto</div>
+                      <div className="mt-1.5 font-black text-primary">
+                        {user.vehicles[0] ? user.vehicles[0].plateNumber : "Niciunul"}
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <div className="text-xs uppercase text-muted-foreground">Rol</div>
-                    <div className="mt-1 font-bold">{roleLabels[user.role]}</div>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <div className="text-xs uppercase text-muted-foreground">Mașina alocată</div>
-                    <div className="mt-1 truncate font-bold">{user.vehicles[0] ? `${user.vehicles[0].make} ${user.vehicles[0].model}` : "N/A"}</div>
-                  </div>
-                </div>
-                <div className="absolute bottom-3 right-3 z-20 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                </Link>
+
+                <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
                   <Link href={`/users/${user.id}/edit`} className="flex size-9 items-center justify-center rounded-md border border-border bg-card/90 shadow-lg backdrop-blur hover:border-primary" title="Editeaza">
                     <Pencil className="size-4" />
                   </Link>

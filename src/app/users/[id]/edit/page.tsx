@@ -10,14 +10,30 @@ import { roleLabels } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditUserPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
   if (session.user.role !== "ADMIN") redirect("/");
   const { id } = await params;
+  const { error } = await searchParams;
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) notFound();
+
+  let errorMessage = "";
+  if (error === "email-exists") {
+    errorMessage = "Această adresă de email este deja folosită de un alt utilizator.";
+  } else if (error === "password-mismatch") {
+    errorMessage = "Parolele introduse nu se potrivesc.";
+  } else if (error === "invalid") {
+    errorMessage = "Datele introduse sunt invalide.";
+  }
 
   return (
     <AppShell>
@@ -30,9 +46,14 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
       </div>
 
       <form action={updateUser.bind(null, user.id)} className="panel grid gap-4 p-5 md:grid-cols-2">
+        {errorMessage && (
+          <div className="mb-2 rounded-md bg-rose-500/10 p-3 text-sm text-rose-400 border border-rose-500/20 md:col-span-2">
+            {errorMessage}
+          </div>
+        )}
         <label><span className="label">Prenume</span><input className="field" name="firstName" defaultValue={user.firstName} required /></label>
         <label><span className="label">Nume</span><input className="field" name="lastName" defaultValue={user.lastName} required /></label>
-        <label><span className="label">Email</span><input className="field" name="email" type="email" defaultValue={user.email} required /></label>
+        <label><span className="label">Email</span><input className="field" name="email" type="email" defaultValue={user.email} required autoComplete="new-password" /></label>
         <label>
           <span className="label">Rol</span>
           <select className="field" name="role" defaultValue={user.role}>
@@ -41,7 +62,9 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
         </label>
         <label className="md:col-span-2"><span className="label">Poza profil URL</span><input className="field" name="profileImageUrl" defaultValue={user.profileImageUrl ?? ""} /></label>
         <label><span className="label">Categorie permis</span><input className="field" name="licenseCategory" defaultValue={user.licenseCategory ?? ""} /></label>
-        <label><span className="label">Parola noua optionala</span><input className="field" name="password" type="password" minLength={8} /></label>
+        <span className="hidden md:block"></span>
+        <label><span className="label">Parola noua optionala</span><input className="field" name="password" type="password" minLength={8} autoComplete="new-password" /></label>
+        <label><span className="label">Confirma parola noua</span><input className="field" name="confirmPassword" type="password" minLength={8} autoComplete="new-password" /></label>
         <label><span className="label">Permis obtinut la</span><input className="field" name="licenseIssuedAt" type="date" defaultValue={dateInput(user.licenseIssuedAt)} /></label>
         <label><span className="label">Permis expira la</span><input className="field" name="licenseExpiresAt" type="date" defaultValue={dateInput(user.licenseExpiresAt)} /></label>
         <label><span className="label">CI obtinuta la</span><input className="field" name="idCardIssuedAt" type="date" defaultValue={dateInput(user.idCardIssuedAt)} /></label>

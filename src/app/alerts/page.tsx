@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { Bell, CheckCircle2 } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dismissReminder } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { formatDate, relativeDue } from "@/lib/format";
 
@@ -35,16 +36,21 @@ export default async function AlertsPage() {
         ) : (
           <div className="divide-y divide-border">
             {alerts.map((alert) => (
-              <Link key={alert.id} href={`/vehicles/${alert.vehicleId}`} className="flex items-center justify-between gap-4 py-4 hover:text-primary">
-                <div className="flex items-center gap-3">
-                  <Bell className="size-5 text-amber-400" />
-                  <div>
-                    <div className="font-bold">{alert.title}</div>
-                    <div className="text-sm text-muted-foreground">{alert.vehicle.plateNumber} - scadenta {formatDate(alert.dueAt)}</div>
+              <div key={alert.id} className="flex items-center justify-between gap-4 py-4 border-b border-border last:border-0">
+                <Link href={`/vehicles/${alert.vehicleId}`} className="flex items-center gap-3 flex-1 hover:text-primary min-w-0">
+                  <Bell className="size-5 shrink-0 text-amber-400" />
+                  <div className="min-w-0">
+                    <div className="font-bold truncate">{alert.title}</div>
+                    <div className="text-sm text-muted-foreground">{alert.vehicle.plateNumber} · scadență {formatDate(alert.dueAt)}</div>
                   </div>
+                </Link>
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-right text-sm text-muted-foreground hidden sm:block">{relativeDue(alert.dueAt)}</div>
+                  <form action={dismissReminder.bind(null, alert.id)}>
+                    <button className="btn-secondary h-8 px-3 text-xs" type="submit">Ascunde</button>
+                  </form>
                 </div>
-                <div className="text-right text-sm text-muted-foreground">{relativeDue(alert.dueAt)}</div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

@@ -1,22 +1,23 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { DocumentType, ExpenseCategory, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus } from "@prisma/client";
-import { BadgeEuro, Box, BriefcaseMedical, Bubbles, Car, CarTaxiFront, Check, ClipboardList, CreditCard, FileCheck, FileCheck2, FileSearch2, FireExtinguisher, Fuel, Gauge, Hammer, Pencil, PlugZap, Plus, ReceiptText, RotateCcw, Save, SquareParking, Trash2, Wifi, Wrench } from "lucide-react";
+import { DocumentType, ExpenseCategory, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus, TireType } from "@prisma/client";
+import { BadgeEuro, Box, BriefcaseMedical, Bubbles, Car, CarTaxiFront, Check, ClipboardList, CreditCard, Disc, FileCheck, FileCheck2, FileSearch2, FireExtinguisher, Fuel, Gauge, Hammer, Pencil, PlugZap, Plus, ReceiptText, RotateCcw, Save, SquareParking, Trash2, Wifi, Wrench } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate, formatKilometers, powerToHp, relativeDue } from "@/lib/format";
-import { addExpense, addVehicleDocument, createPaymentPlan, deleteExpense, deletePaymentPlan, deleteVehicle, deleteVehicleDocument, markInstallmentPaid, markInstallmentUnpaid, updateExpense, updatePaymentInstallment, updatePaymentPlan, updateVehicleDocument } from "@/app/actions";
+import { addExpense, addVehicleDocument, createPaymentPlan, deleteExpense, deletePaymentPlan, deleteVehicle, deleteVehicleDocument, markInstallmentPaid, markInstallmentUnpaid, updateExpense, updatePaymentInstallment, updatePaymentPlan, updateVehicleDocument, addServiceRecord, updateServiceRecord, deleteServiceRecord, addTireSet, updateTireSet, deleteTireSet } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
-import { documentLabels, expenseLabels, fuelLabels, paymentFrequencyLabels, paymentInstallmentStatusLabels, paymentPlanCategoryLabels, paymentPlanStatusLabels, paymentTypes } from "@/lib/labels";
+import { documentLabels, expenseLabels, fuelLabels, paymentFrequencyLabels, paymentInstallmentStatusLabels, paymentPlanCategoryLabels, paymentPlanStatusLabels, paymentTypes, tireTypeLabels } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
-export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VehicleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
   const { id } = await params;
+  const { tab = "date" } = await searchParams;
 
   const vehicle = await prisma.vehicle.findUnique({
     where: { id },
@@ -28,6 +29,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         orderBy: { createdAt: "desc" },
         include: { installments: { orderBy: { installmentNumber: "asc" } } }
       },
+      services: { orderBy: { servicedAt: "desc" } },
+      tires: { orderBy: { purchasedAt: "desc" } },
       driver: true
     }
   });
@@ -36,6 +39,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   if (session.user.role !== "ADMIN" && vehicle.driverId !== session.user.id) notFound();
 
   const totalExpenses = vehicle.expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+  const totalServices = vehicle.services.reduce((sum, item) => sum + Number(item.cost), 0);
+  const totalTires = vehicle.tires.reduce((sum, item) => sum + Number(item.cost ?? 0), 0);
   const documentCosts = vehicle.documents.reduce((sum, item) => sum + Number(item.cost ?? 0), 0);
   const registryTypes = Object.values(DocumentType).filter((type) => !paymentTypes.includes(type) && type !== DocumentType.DRIVER_LICENSE && type !== DocumentType.ID_CARD);
   const documents = vehicle.documents.filter((doc) => registryTypes.includes(doc.type));
@@ -102,34 +107,72 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-3">
-        <div className="panel p-5 lg:col-span-2">
-          <h2 className="mb-5 text-xl font-black">Date vehicul</h2>
-          <div className="grid gap-3 text-sm md:grid-cols-2">
-            <Info label="VIN" value={vehicle.vin} />
-            <Info label="Serie CIV" value={vehicle.civSeries} />
-            <Info label="Certificat" value={vehicle.registrationSeries} />
-            <Info label="Cilindree" value={vehicle.engineCapacityCc ? `${vehicle.engineCapacityCc} cc` : undefined} />
-            <Info label="Putere" value={vehicle.powerKw ? `${vehicle.powerKw} kW${hp ? ` / ${hp} CP` : ""}` : undefined} />
-            <Info label="Combustibil" value={vehicle.fuelType ? fuelLabels[vehicle.fuelType] : undefined} />
-            <Info label="Culoare" value={vehicle.color} />
-            <Info label="Masa totala" value={vehicle.totalMassKg ? `${vehicle.totalMassKg} kg` : undefined} />
-            <Info label="Locuri" value={vehicle.seats?.toString()} />
-            <Info label="An fabricatie" value={vehicle.manufacturingYear?.toString()} />
-            <Info label="Pret achizitie" value={vehicle.acquisitionPrice ? formatCurrency(vehicle.acquisitionPrice) : undefined} />
-            <Info label="Ultimul kilometraj" value={formatKilometers(latestOdometer)} />
+      {/* Meniu Tab-uri */}
+      <div className="mb-6 flex flex-wrap border-b border-border text-sm font-semibold">
+        <Link href={`/vehicles/${vehicle.id}?tab=date`} className={`mr-2 border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${tab === "date" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+          <ClipboardList className="size-4" />
+          <span>Date generale</span>
+        </Link>
+        <Link href={`/vehicles/${vehicle.id}?tab=registru`} className={`mr-2 border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${tab === "registru" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+          <FileCheck className="size-4" />
+          <span>Registru ({documents.length})</span>
+        </Link>
+        <Link href={`/vehicles/${vehicle.id}?tab=cheltuieli`} className={`mr-2 border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${tab === "cheltuieli" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+          <ReceiptText className="size-4" />
+          <span>Cheltuieli ({vehicle.expenses.length})</span>
+        </Link>
+        <Link href={`/vehicles/${vehicle.id}?tab=rate`} className={`mr-2 border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${tab === "rate" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+          <CreditCard className="size-4" />
+          <span>Rate ({vehicle.paymentPlans.length})</span>
+        </Link>
+        <Link href={`/vehicles/${vehicle.id}?tab=revizii`} className={`mr-2 border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${tab === "revizii" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+          <Wrench className="size-4" />
+          <span>Revizii ({vehicle.services.length})</span>
+        </Link>
+        <Link href={`/vehicles/${vehicle.id}?tab=anvelope`} className={`mr-2 border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${tab === "anvelope" ? "border-primary text-primary font-bold" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}>
+          <Disc className="size-4" />
+          <span>Anvelope ({vehicle.tires.length})</span>
+        </Link>
+      </div>
+
+      {tab === "date" && (
+        <section className="grid gap-5 lg:grid-cols-3">
+          <div className="panel p-5 lg:col-span-2">
+            <h2 className="mb-5 text-xl font-black">Date vehicul</h2>
+            <div className="grid gap-3 text-sm md:grid-cols-2">
+              <Info label="VIN" value={vehicle.vin} />
+              <Info label="Serie CIV" value={vehicle.civSeries} />
+              <Info label="Certificat" value={vehicle.registrationSeries} />
+              <Info label="Cilindree" value={vehicle.engineCapacityCc ? `${vehicle.engineCapacityCc} cc` : undefined} />
+              <Info label="Putere" value={vehicle.powerKw ? `${vehicle.powerKw} kW${hp ? ` / ${hp} CP` : ""}` : undefined} />
+              <Info label="Combustibil" value={vehicle.fuelType ? fuelLabels[vehicle.fuelType] : undefined} />
+              <Info label="Culoare" value={vehicle.color} />
+              <Info label="Masa totala" value={vehicle.totalMassKg ? `${vehicle.totalMassKg} kg` : undefined} />
+              <Info label="Locuri" value={vehicle.seats?.toString()} />
+              <Info label="An fabricatie" value={vehicle.manufacturingYear?.toString()} />
+              <Info label="Pret achizitie" value={vehicle.acquisitionPrice ? formatCurrency(vehicle.acquisitionPrice) : undefined} />
+              <Info label="Ultimul kilometraj" value={formatKilometers(latestOdometer)} />
+            </div>
+            {vehicle.notes ? <p className="mt-5 rounded-md bg-muted/40 p-4 text-sm text-muted-foreground">{vehicle.notes}</p> : null}
           </div>
-          {vehicle.notes ? <p className="mt-5 rounded-md bg-muted/40 p-4 text-sm text-muted-foreground">{vehicle.notes}</p> : null}
-        </div>
 
-        <div className="panel p-5">
-          <h2 className="mb-5 text-xl font-black">Sumar costuri</h2>
-          <div className="text-4xl font-black">{formatCurrency(totalExpenses + documentCosts)}</div>
-          <p className="mt-2 text-sm text-muted-foreground">Include cheltuieli si costuri registru.</p>
-        </div>
-      </section>
+          <div className="panel p-5 flex flex-col justify-between">
+            <div>
+              <h2 className="mb-5 text-xl font-black">Sumar costuri</h2>
+              <div className="text-4xl font-black text-primary">{formatCurrency(totalExpenses + documentCosts + totalServices + totalTires)}</div>
+              <p className="mt-2 text-sm text-muted-foreground">Costul total cumulat al mașinii de la înregistrare.</p>
+            </div>
+            <div className="mt-6 space-y-2.5 border-t border-border pt-4 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Cheltuieli diverse:</span><strong>{formatCurrency(totalExpenses)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Registru documente:</span><strong>{formatCurrency(documentCosts)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Revizii periodice:</span><strong>{formatCurrency(totalServices)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Seturi anvelope:</span><strong>{formatCurrency(totalTires)}</strong></div>
+            </div>
+          </div>
+        </section>
+      )}
 
-      <section className="mt-7 grid gap-7 xl:grid-cols-2">
+      {tab === "registru" && (
         <div className="panel p-5">
           <details className="mb-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
@@ -228,7 +271,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             ))}
           </div>
         </div>
+      )}
 
+      {tab === "cheltuieli" && (
         <div className="panel p-5">
           <details className="mb-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
@@ -242,7 +287,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
               <label>
                 <span className="label">Cheltuiala</span>
                 <select className="field" name="category" required>
-                  {Object.values(ExpenseCategory).map((category) => <option key={category} value={category}>{expenseLabels[category]}</option>)}
+                  {Object.values(ExpenseCategory).filter((cat) => cat !== ExpenseCategory.SERVICE).map((category) => <option key={category} value={category}>{expenseLabels[category]}</option>)}
                 </select>
               </label>
               <label>
@@ -284,7 +329,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                       <label>
                         <span className="label">Cheltuiala</span>
                         <select className="field" name="category" defaultValue={expense.category} required>
-                          {Object.values(ExpenseCategory).map((category) => <option key={category} value={category}>{expenseLabels[category]}</option>)}
+                          {Object.values(ExpenseCategory).filter((cat) => cat !== ExpenseCategory.SERVICE).map((category) => <option key={category} value={category}>{expenseLabels[category]}</option>)}
                         </select>
                       </label>
                       <label>
@@ -313,200 +358,428 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             ))}
           </div>
         </div>
-      </section>
+      )}
 
-      <section className="panel mt-7 p-5">
-        <div className="mb-5">
-          <h2 className="flex items-center gap-2 text-xl font-black"><CreditCard className="size-5 text-primary" /> Rate</h2>
-          <p className="mt-2 max-w-4xl text-sm text-muted-foreground">
-            Configureaza planuri de plata recurente pentru credit masina, CASCO, RCA, leasing sau alte obligatii. Aplicatia genereaza calendarul ratelor si actualizeaza automat urmatoarea plata, ratele ramase si valoarea ramasa.
-          </p>
-        </div>
+      {tab === "rate" && (
+        <div className="panel p-5">
+          <div className="mb-5">
+            <h2 className="flex items-center gap-2 text-xl font-black"><CreditCard className="size-5 text-primary" /> Rate</h2>
+            <p className="mt-2 max-w-4xl text-sm text-muted-foreground">
+              Configureaza planuri de plata recurente pentru credit masina, CASCO, RCA, leasing sau alte obligatii. Aplicatia genereaza calendarul ratelor si actualizeaza automat urmatoarea plata, ratele ramase si valoarea ramasa.
+            </p>
+          </div>
 
-        <div className="mb-5 grid gap-3">
-          {vehicle.paymentPlans.map((plan) => {
-            const summary = paymentPlanSummary(plan);
-            const nextInstallment = summary.nextInstallment;
+          <div className="mb-5 grid gap-3">
+            {vehicle.paymentPlans.map((plan) => {
+              const summary = paymentPlanSummary(plan);
+              const nextInstallment = summary.nextInstallment;
 
-            return (
-              <div key={plan.id} className="group relative rounded-md border border-border bg-muted/20 p-3">
-                <div className="flex items-start justify-between gap-3 text-sm">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <PaymentPlanIcon category={plan.category} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="font-bold">{plan.name}</span>
-                        <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">{paymentPlanCategoryLabels[plan.category]}</span>
-                        <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">{paymentPlanStatusLabels[summary.status]}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-muted-foreground">
-                        <span>Total {formatMoney(plan.totalAmount, plan.currency)}</span>
-                        <span>-</span>
-                        <span>Rata {formatMoney(plan.installmentAmount, plan.currency)}</span>
-                        <span>-</span>
-                        <span>{summary.paidCount}/{summary.payableCount} platite</span>
-                        <span>-</span>
-                        <span>Rest {formatMoney(summary.remainingAmount, plan.currency)}</span>
-                        {nextInstallment ? (
-                          <>
-                            <span>-</span>
-                            <span>Urmatoarea {formatDate(nextInstallment.dueDate)}</span>
-                          </>
-                        ) : null}
+              return (
+                <div key={plan.id} className="group relative rounded-md border border-border bg-muted/20 p-3">
+                  <div className="flex items-start justify-between gap-3 text-sm">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <PaymentPlanIcon category={plan.category} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-bold">{plan.name}</span>
+                          <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">{paymentPlanCategoryLabels[plan.category]}</span>
+                          <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">{paymentPlanStatusLabels[summary.status]}</span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-muted-foreground">
+                          <span>Total {formatMoney(plan.totalAmount, plan.currency)}</span>
+                          <span>-</span>
+                          <span>Rata {formatMoney(plan.installmentAmount, plan.currency)}</span>
+                          <span>-</span>
+                          <span>{summary.paidCount}/{summary.payableCount} platite</span>
+                          <span>-</span>
+                          <span>Rest {formatMoney(summary.remainingAmount, plan.currency)}</span>
+                          {nextInstallment ? (
+                            <>
+                              <span>-</span>
+                              <span>Urmatoarea {formatDate(nextInstallment.dueDate)}</span>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
+                    <div className="absolute bottom-3 right-3 z-10 flex shrink-0 items-center gap-2 opacity-0 transition group-hover:opacity-100">
+                      <details className="relative">
+                        <summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card/90 shadow-lg backdrop-blur hover:border-primary" title="Editeaza">
+                          <Pencil className="size-4" />
+                        </summary>
+                        <form action={updatePaymentPlan.bind(null, plan.id)} className="absolute right-0 z-20 mt-2 grid w-[min(760px,calc(100vw-2rem))] gap-3 rounded-lg border border-border bg-card p-4 shadow-xl md:grid-cols-[1fr_140px_120px_90px_110px_130px_90px_44px]">
+                          <label><span className="label">Nume</span><input className="field" name="name" defaultValue={plan.name} required /></label>
+                          <label>
+                            <span className="label">Tip plata</span>
+                            <select className="field" name="category" defaultValue={plan.category} required>
+                              {Object.values(PaymentPlanCategory).map((category) => <option key={category} value={category}>{paymentPlanCategoryLabels[category]}</option>)}
+                            </select>
+                          </label>
+                          <label><span className="label">Total</span><input className="field" name="totalAmount" defaultValue={plan.totalAmount.toString()} required /></label>
+                          <label><span className="label">Rate</span><input className="field" name="totalInstallments" type="number" min="1" defaultValue={plan.totalInstallments} required /></label>
+                          <label><span className="label">Rata</span><input className="field" name="installmentAmount" defaultValue={plan.installmentAmount.toString()} required /></label>
+                          <label>
+                            <span className="label">Frecventa</span>
+                            <select className="field" name="frequency" defaultValue={plan.frequency}>
+                              {Object.values(PaymentFrequency).map((frequency) => <option key={frequency} value={frequency}>{paymentFrequencyLabels[frequency]}</option>)}
+                            </select>
+                          </label>
+                          <label>
+                            <span className="label">Moneda</span>
+                            <select className="field" name="currency" defaultValue={plan.currency}>
+                              <option value="RON">RON</option>
+                              <option value="EUR">EUR</option>
+                            </select>
+                          </label>
+                          <button className="btn size-11 self-end px-0" type="submit" title="Salveaza"><Save className="size-6" /></button>
+                          <label><span className="label">Prima plata</span><input className="field" name="firstPaymentDate" type="date" defaultValue={dateInput(plan.firstPaymentDate)} required /></label>
+                          <label>
+                            <span className="label">Status</span>
+                            <select className="field" name="status" defaultValue={plan.status}>
+                              {Object.values(PaymentPlanStatus).map((status) => <option key={status} value={status}>{paymentPlanStatusLabels[status]}</option>)}
+                            </select>
+                          </label>
+                          <label><span className="label">Notificare</span><input className="field" name="reminderDays" type="number" min="0" defaultValue={plan.reminderDays} /></label>
+                          <label className="md:col-span-4"><span className="label">Note</span><input className="field" name="notes" defaultValue={plan.notes ?? ""} /></label>
+                        </form>
+                      </details>
+                      <form action={deletePaymentPlan.bind(null, plan.id)}>
+                        <button className="flex size-9 items-center justify-center rounded-md border border-rose-500/40 bg-card/90 text-rose-300 shadow-lg backdrop-blur hover:border-rose-400" type="submit" title="Sterge plan">
+                          <Trash2 className="size-4" />
+                        </button>
+                      </form>
+                    </div>
                   </div>
-                  <div className="absolute bottom-3 right-3 z-10 flex shrink-0 items-center gap-2 opacity-0 transition group-hover:opacity-100">
+
+                  <div className="mt-4 overflow-x-auto rounded-md border border-border">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                      <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2">Rata</th>
+                          <th className="px-3 py-2">Scadenta</th>
+                          <th className="px-3 py-2">Valoare</th>
+                          <th className="px-3 py-2">Status</th>
+                          <th className="px-3 py-2">Platita la</th>
+                          <th className="px-3 py-2 text-right">Actiuni</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {plan.installments.map((installment) => {
+                          const displayStatus = installmentDisplayStatus(installment, summary.nextInstallment?.id);
+
+                          return (
+                            <tr key={installment.id} className="group/installment">
+                              <td className="px-3 py-2 font-semibold">{installment.installmentNumber}</td>
+                              <td className="px-3 py-2">{formatDate(installment.dueDate)}</td>
+                              <td className="px-3 py-2">{formatMoney(installment.amount, installment.currency)}</td>
+                              <td className="px-3 py-2">{displayStatus}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{installment.paidDate ? formatDate(installment.paidDate) : "-"}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex justify-end gap-2 opacity-0 transition group-hover/installment:opacity-100">
+                                  {installment.status === PaymentInstallmentStatus.PAID ? (
+                                    <form action={markInstallmentUnpaid.bind(null, installment.id)}>
+                                      <button className="flex size-8 items-center justify-center rounded-md border border-border bg-card/90 shadow-sm hover:border-primary" type="submit" title="Marcheaza neplatita"><RotateCcw className="size-4" /></button>
+                                    </form>
+                                  ) : (
+                                    <form action={markInstallmentPaid.bind(null, installment.id)}>
+                                      <button className="flex size-8 items-center justify-center rounded-md border border-border bg-card/90 shadow-sm hover:border-primary" type="submit" title="Marcheaza platita"><Check className="size-4" /></button>
+                                    </form>
+                                  )}
+                                  <details className="relative">
+                                    <summary className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card/90 shadow-sm hover:border-primary" title="Editeaza rata">
+                                      <Pencil className="size-4" />
+                                    </summary>
+                                    <form action={updatePaymentInstallment.bind(null, installment.id)} className="absolute right-0 z-20 mt-2 grid w-[min(520px,calc(100vw-2rem))] gap-3 rounded-lg border border-border bg-card p-4 shadow-xl md:grid-cols-[120px_110px_130px_120px_44px]">
+                                      <label><span className="label">Scadenta</span><input className="field" name="dueDate" type="date" defaultValue={dateInput(installment.dueDate)} required /></label>
+                                      <label><span className="label">Valoare</span><input className="field" name="amount" defaultValue={installment.amount.toString()} required /></label>
+                                      <label>
+                                        <span className="label">Status</span>
+                                        <select className="field" name="status" defaultValue={installment.status}>
+                                          {Object.values(PaymentInstallmentStatus).map((status) => <option key={status} value={status}>{paymentInstallmentStatusLabels[status]}</option>)}
+                                        </select>
+                                      </label>
+                                      <label><span className="label">Platita la</span><input className="field" name="paidDate" type="date" defaultValue={dateInput(installment.paidDate)} /></label>
+                                      <button className="btn size-11 self-end px-0" type="submit" title="Salveaza"><Save className="size-6" /></button>
+                                      <label className="md:col-span-5"><span className="label">Note</span><input className="field" name="notes" defaultValue={installment.notes ?? ""} /></label>
+                                    </form>
+                                  </details>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+            {vehicle.paymentPlans.length === 0 ? <div className="text-sm text-muted-foreground">Nu exista planuri de plata adaugate.</div> : null}
+          </div>
+
+          <details>
+            <summary className="btn-secondary h-9 cursor-pointer list-none px-3 w-fit">
+              <Plus className="size-4" />
+              Adauga plan de plata
+            </summary>
+            <form action={createPaymentPlan.bind(null, vehicle.id)} className="mt-4 grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[1fr_150px_120px_90px_110px_130px_90px_44px]">
+              <label><span className="label">Nume</span><input className="field" name="name" placeholder="Plan plata 2026" required /></label>
+              <label>
+                <span className="label">Tip plata</span>
+                <select className="field" name="category" defaultValue={PaymentPlanCategory.CASCO} required>
+                  {Object.values(PaymentPlanCategory).map((category) => <option key={category} value={category}>{paymentPlanCategoryLabels[category]}</option>)}
+                </select>
+              </label>
+              <label><span className="label">Total</span><input className="field" name="totalAmount" required /></label>
+              <label><span className="label">Rate</span><input className="field" name="totalInstallments" type="number" min="1" defaultValue={12} required /></label>
+              <label><span className="label">Rata</span><input className="field" name="installmentAmount" placeholder="Auto" /></label>
+              <label>
+                <span className="label">Frecventa</span>
+                <select className="field" name="frequency" defaultValue={PaymentFrequency.MONTHLY}>
+                  {Object.values(PaymentFrequency).map((frequency) => <option key={frequency} value={frequency}>{paymentFrequencyLabels[frequency]}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className="label">Moneda</span>
+                <select className="field" name="currency" defaultValue="RON">
+                  <option value="RON">RON</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </label>
+              <button className="btn size-11 self-end px-0" type="submit" title="Adauga"><Plus className="size-6" /></button>
+              <label><span className="label">Prima plata</span><input className="field" name="firstPaymentDate" type="date" required /></label>
+              <label><span className="label">Notificare</span><input className="field" name="reminderDays" type="number" min="0" defaultValue={7} /></label>
+              <label className="md:col-span-5"><span className="label">Note</span><input className="field" name="notes" /></label>
+            </form>
+          </details>
+        </div>
+      )}
+
+      {tab === "revizii" && (
+        <div className="panel p-5">
+          <details className="mb-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-xl font-black"><Wrench className="size-5 text-primary" /> Revizii periodice</h2>
+              <span className="btn-secondary h-9 px-3">
+                <Plus className="size-4" />
+                Adăugare revizie
+              </span>
+            </summary>
+            <form action={addServiceRecord.bind(null, vehicle.id)} className="mt-4 grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[140px_140px_120px_44px_1fr]">
+              <label>
+                <span className="label">Data reviziei</span>
+                <input className="field" name="servicedAt" type="date" required />
+              </label>
+              <label>
+                <span className="label">Kilometraj</span>
+                <input className="field" name="odometerKm" type="number" placeholder="ex: 150000" />
+              </label>
+              <label>
+                <span className="label">Cost lei</span>
+                <input className="field" name="cost" required placeholder="0.00" />
+              </label>
+              <button className="btn size-11 self-end px-0" type="submit" title="Salvează"><Save className="size-6" /></button>
+              <label className="md:col-span-5">
+                <span className="label">Detalii/Piese schimbate</span>
+                <textarea className="field min-h-16" name="notes" placeholder="ex: Schimb ulei motor, filtru aer, filtru habitaclu..." />
+              </label>
+            </form>
+          </details>
+
+          <div className="grid gap-3">
+            {vehicle.services.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                Nu există nicio revizie înregistrată.
+              </div>
+            ) : null}
+            {vehicle.services.map((service) => (
+              <div key={service.id} className="group relative rounded-md border border-border bg-muted/20 p-3 pr-24">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-md bg-primary/15 text-primary">
+                      <Wrench className="size-5" />
+                    </span>
+                    <div className="min-w-0 text-sm">
+                      <span className="font-bold">{formatDate(service.servicedAt)}</span>
+                      <span className="px-2 text-muted-foreground">-</span>
+                      <span className="font-semibold text-primary">{formatCurrency(service.cost)}</span>
+                      {service.odometerKm ? (
+                        <>
+                          <span className="px-2 text-muted-foreground">-</span>
+                          <span className="text-muted-foreground">{formatKilometers(service.odometerKm)}</span>
+                        </>
+                      ) : null}
+                      {service.notes ? (
+                        <div className="mt-1 text-xs text-muted-foreground italic truncate max-w-xl">{service.notes}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-3 right-3 flex shrink-0 items-center gap-2 opacity-0 transition group-hover:opacity-100">
                     <details className="relative">
-                      <summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card/90 shadow-lg backdrop-blur hover:border-primary" title="Editeaza">
+                      <summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card/90 shadow-lg backdrop-blur hover:border-primary" title="Editează">
                         <Pencil className="size-4" />
                       </summary>
-                      <form action={updatePaymentPlan.bind(null, plan.id)} className="absolute right-0 z-20 mt-2 grid w-[min(760px,calc(100vw-2rem))] gap-3 rounded-lg border border-border bg-card p-4 shadow-xl md:grid-cols-[1fr_140px_120px_90px_110px_130px_90px_44px]">
-                        <label><span className="label">Nume</span><input className="field" name="name" defaultValue={plan.name} required /></label>
+                      <form action={updateServiceRecord.bind(null, service.id)} className="absolute right-0 z-20 mt-2 grid w-[min(560px,calc(100vw-2rem))] gap-3 rounded-lg border border-border bg-card p-4 shadow-xl md:grid-cols-[140px_140px_120px_44px_1fr]">
                         <label>
-                          <span className="label">Tip plata</span>
-                          <select className="field" name="category" defaultValue={plan.category} required>
-                            {Object.values(PaymentPlanCategory).map((category) => <option key={category} value={category}>{paymentPlanCategoryLabels[category]}</option>)}
-                          </select>
-                        </label>
-                        <label><span className="label">Total</span><input className="field" name="totalAmount" defaultValue={plan.totalAmount.toString()} required /></label>
-                        <label><span className="label">Rate</span><input className="field" name="totalInstallments" type="number" min="1" defaultValue={plan.totalInstallments} required /></label>
-                        <label><span className="label">Rata</span><input className="field" name="installmentAmount" defaultValue={plan.installmentAmount.toString()} required /></label>
-                        <label>
-                          <span className="label">Frecventa</span>
-                          <select className="field" name="frequency" defaultValue={plan.frequency}>
-                            {Object.values(PaymentFrequency).map((frequency) => <option key={frequency} value={frequency}>{paymentFrequencyLabels[frequency]}</option>)}
-                          </select>
+                          <span className="label">Data reviziei</span>
+                          <input className="field" name="servicedAt" type="date" defaultValue={dateInput(service.servicedAt)} required />
                         </label>
                         <label>
-                          <span className="label">Moneda</span>
-                          <select className="field" name="currency" defaultValue={plan.currency}>
-                            <option value="RON">RON</option>
-                            <option value="EUR">EUR</option>
-                          </select>
+                          <span className="label">Kilometraj</span>
+                          <input className="field" name="odometerKm" type="number" defaultValue={service.odometerKm ?? ""} />
                         </label>
-                        <button className="btn size-11 self-end px-0" type="submit" title="Salveaza"><Save className="size-6" /></button>
-                        <label><span className="label">Prima plata</span><input className="field" name="firstPaymentDate" type="date" defaultValue={dateInput(plan.firstPaymentDate)} required /></label>
                         <label>
-                          <span className="label">Status</span>
-                          <select className="field" name="status" defaultValue={plan.status}>
-                            {Object.values(PaymentPlanStatus).map((status) => <option key={status} value={status}>{paymentPlanStatusLabels[status]}</option>)}
-                          </select>
+                          <span className="label">Cost lei</span>
+                          <input className="field" name="cost" defaultValue={service.cost.toString()} required />
                         </label>
-                        <label><span className="label">Notificare</span><input className="field" name="reminderDays" type="number" min="0" defaultValue={plan.reminderDays} /></label>
-                        <label className="md:col-span-4"><span className="label">Note</span><input className="field" name="notes" defaultValue={plan.notes ?? ""} /></label>
+                        <button className="btn size-11 self-end px-0" type="submit" title="Salvează"><Save className="size-6" /></button>
+                        <label className="md:col-span-5">
+                          <span className="label">Detalii/Piese schimbate</span>
+                          <textarea className="field min-h-16" name="notes" defaultValue={service.notes ?? ""} />
+                        </label>
                       </form>
                     </details>
-                    <form action={deletePaymentPlan.bind(null, plan.id)}>
-                      <button className="flex size-9 items-center justify-center rounded-md border border-rose-500/40 bg-card/90 text-rose-300 shadow-lg backdrop-blur hover:border-rose-400" type="submit" title="Sterge plan">
+                    <form action={deleteServiceRecord.bind(null, service.id)}>
+                      <button className="flex size-9 items-center justify-center rounded-md border border-rose-500/40 bg-card/90 text-rose-300 shadow-lg backdrop-blur hover:border-rose-400" type="submit" title="Șterge">
                         <Trash2 className="size-4" />
                       </button>
                     </form>
                   </div>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-                <div className="mt-4 overflow-x-auto rounded-md border border-border">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2">Rata</th>
-                        <th className="px-3 py-2">Scadenta</th>
-                        <th className="px-3 py-2">Valoare</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2">Platita la</th>
-                        <th className="px-3 py-2 text-right">Actiuni</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {plan.installments.map((installment) => {
-                        const displayStatus = installmentDisplayStatus(installment, summary.nextInstallment?.id);
+      {tab === "anvelope" && (
+        <div className="panel p-5">
+          <details className="mb-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-xl font-black"><Disc className="size-5 text-primary" /> Anvelope</h2>
+              <span className="btn-secondary h-9 px-3">
+                <Plus className="size-4" />
+                Adăugare anvelope
+              </span>
+            </summary>
+            <form action={addTireSet.bind(null, vehicle.id)} className="mt-4 grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[140px_140px_140px_120px_110px_44px_1fr]">
+              <label>
+                <span className="label">Tip anvelope</span>
+                <select className="field" name="type" required>
+                  {Object.values(TireType).map((type) => <option key={type} value={type}>{tireTypeLabels[type]}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className="label">Brand</span>
+                <input className="field" name="brand" placeholder="ex: Michelin" required />
+              </label>
+              <label>
+                <span className="label">Dimensiune</span>
+                <input className="field" name="size" placeholder="ex: 205/55 R16" required />
+              </label>
+              <label>
+                <span className="label">Model</span>
+                <input className="field" name="model" placeholder="ex: Primacy 4" />
+              </label>
+              <label>
+                <span className="label">Cost total</span>
+                <input className="field" name="cost" placeholder="lei" />
+              </label>
+              <button className="btn size-11 self-end px-0" type="submit" title="Salvează"><Save className="size-6" /></button>
+              <label className="md:col-span-7">
+                <span className="label">Data achiziției</span>
+                <input className="field" name="purchasedAt" type="date" required />
+              </label>
+              <label className="md:col-span-7">
+                <span className="label">Note / DOT / Uzură</span>
+                <textarea className="field min-h-16" name="notes" placeholder="ex: DOT 4225, stare excelentă, cumpărate noi" />
+              </label>
+            </form>
+          </details>
 
-                        return (
-                        <tr key={installment.id} className="group/installment">
-                            <td className="px-3 py-2 font-semibold">{installment.installmentNumber}</td>
-                            <td className="px-3 py-2">{formatDate(installment.dueDate)}</td>
-                            <td className="px-3 py-2">{formatMoney(installment.amount, installment.currency)}</td>
-                            <td className="px-3 py-2">{displayStatus}</td>
-                            <td className="px-3 py-2 text-muted-foreground">{installment.paidDate ? formatDate(installment.paidDate) : "-"}</td>
-                            <td className="px-3 py-2">
-                              <div className="flex justify-end gap-2 opacity-0 transition group-hover/installment:opacity-100">
-                                {installment.status === PaymentInstallmentStatus.PAID ? (
-                                  <form action={markInstallmentUnpaid.bind(null, installment.id)}>
-                                    <button className="flex size-8 items-center justify-center rounded-md border border-border bg-card/90 shadow-sm hover:border-primary" type="submit" title="Marcheaza neplatita"><RotateCcw className="size-4" /></button>
-                                  </form>
-                                ) : (
-                                  <form action={markInstallmentPaid.bind(null, installment.id)}>
-                                    <button className="flex size-8 items-center justify-center rounded-md border border-border bg-card/90 shadow-sm hover:border-primary" type="submit" title="Marcheaza platita"><Check className="size-4" /></button>
-                                  </form>
-                                )}
-                                <details className="relative">
-                                  <summary className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card/90 shadow-sm hover:border-primary" title="Editeaza rata">
-                                    <Pencil className="size-4" />
-                                  </summary>
-                                  <form action={updatePaymentInstallment.bind(null, installment.id)} className="absolute right-0 z-20 mt-2 grid w-[min(520px,calc(100vw-2rem))] gap-3 rounded-lg border border-border bg-card p-4 shadow-xl md:grid-cols-[120px_110px_130px_120px_44px]">
-                                    <label><span className="label">Scadenta</span><input className="field" name="dueDate" type="date" defaultValue={dateInput(installment.dueDate)} required /></label>
-                                    <label><span className="label">Valoare</span><input className="field" name="amount" defaultValue={installment.amount.toString()} required /></label>
-                                    <label>
-                                      <span className="label">Status</span>
-                                      <select className="field" name="status" defaultValue={installment.status}>
-                                        {Object.values(PaymentInstallmentStatus).map((status) => <option key={status} value={status}>{paymentInstallmentStatusLabels[status]}</option>)}
-                                      </select>
-                                    </label>
-                                    <label><span className="label">Platita la</span><input className="field" name="paidDate" type="date" defaultValue={dateInput(installment.paidDate)} /></label>
-                                    <button className="btn size-11 self-end px-0" type="submit" title="Salveaza"><Save className="size-6" /></button>
-                                    <label className="md:col-span-5"><span className="label">Note</span><input className="field" name="notes" defaultValue={installment.notes ?? ""} /></label>
-                                  </form>
-                                </details>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+          <div className="grid gap-3">
+            {vehicle.tires.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                Nu există niciun set de anvelope înregistrat.
+              </div>
+            ) : null}
+            {vehicle.tires.map((tire) => (
+              <div key={tire.id} className="group relative rounded-md border border-border bg-muted/20 p-3 pr-24">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-md bg-primary/15 text-primary">
+                      <Disc className="size-5" />
+                    </span>
+                    <div className="min-w-0 text-sm">
+                      <span className="font-bold">{tireTypeLabels[tire.type]}</span>
+                      <span className="px-2 text-muted-foreground">-</span>
+                      <span className="font-semibold">{tire.brand} {tire.model ? `(${tire.model})` : ""}</span>
+                      <span className="px-2 text-muted-foreground">-</span>
+                      <span className="text-muted-foreground">{tire.size}</span>
+                      {tire.cost ? (
+                        <>
+                          <span className="px-2 text-muted-foreground">-</span>
+                          <span className="font-semibold text-primary">{formatCurrency(tire.cost)}</span>
+                        </>
+                      ) : null}
+                      <span className="px-2 text-muted-foreground">-</span>
+                      <span className="text-muted-foreground">Achiziționat: {formatDate(tire.purchasedAt)}</span>
+                      {tire.notes ? (
+                        <div className="mt-1 text-xs text-muted-foreground italic truncate max-w-xl">{tire.notes}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-3 right-3 flex shrink-0 items-center gap-2 opacity-0 transition group-hover:opacity-100">
+                    <details className="relative">
+                      <summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card/90 shadow-lg backdrop-blur hover:border-primary" title="Editează">
+                        <Pencil className="size-4" />
+                      </summary>
+                      <form action={updateTireSet.bind(null, tire.id)} className="absolute right-0 z-20 mt-2 grid w-[min(680px,calc(100vw-2rem))] gap-3 rounded-lg border border-border bg-card p-4 shadow-xl md:grid-cols-[140px_140px_140px_120px_110px_44px_1fr]">
+                        <label>
+                          <span className="label">Tip anvelope</span>
+                          <select className="field" name="type" defaultValue={tire.type} required>
+                            {Object.values(TireType).map((type) => <option key={type} value={type}>{tireTypeLabels[type]}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          <span className="label">Brand</span>
+                          <input className="field" name="brand" defaultValue={tire.brand} required />
+                        </label>
+                        <label>
+                          <span className="label">Dimensiune</span>
+                          <input className="field" name="size" defaultValue={tire.size} required />
+                        </label>
+                        <label>
+                          <span className="label">Model</span>
+                          <input className="field" name="model" defaultValue={tire.model ?? ""} />
+                        </label>
+                        <label>
+                          <span className="label">Cost total</span>
+                          <input className="field" name="cost" defaultValue={tire.cost?.toString() ?? ""} />
+                        </label>
+                        <button className="btn size-11 self-end px-0" type="submit" title="Salvează"><Save className="size-6" /></button>
+                        <label className="md:col-span-7">
+                          <span className="label">Data achiziției</span>
+                          <input className="field" name="purchasedAt" type="date" defaultValue={dateInput(tire.purchasedAt)} required />
+                        </label>
+                        <label className="md:col-span-7">
+                          <span className="label">Note / DOT / Uzură</span>
+                          <textarea className="field min-h-16" name="notes" defaultValue={tire.notes ?? ""} />
+                        </label>
+                      </form>
+                    </details>
+                    <form action={deleteTireSet.bind(null, tire.id)}>
+                      <button className="flex size-9 items-center justify-center rounded-md border border-rose-500/40 bg-card/90 text-rose-300 shadow-lg backdrop-blur hover:border-rose-400" type="submit" title="Șterge">
+                        <Trash2 className="size-4" />
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-          {vehicle.paymentPlans.length === 0 ? <div className="text-sm text-muted-foreground">Nu exista planuri de plata adaugate.</div> : null}
+            ))}
+          </div>
         </div>
-
-        <details>
-          <summary className="btn-secondary h-9 cursor-pointer list-none px-3">
-            <Plus className="size-4" />
-            Adauga plan de plata
-          </summary>
-          <form action={createPaymentPlan.bind(null, vehicle.id)} className="mt-4 grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[1fr_150px_120px_90px_110px_130px_90px_44px]">
-            <label><span className="label">Nume</span><input className="field" name="name" placeholder="Plan plata 2026" required /></label>
-            <label>
-              <span className="label">Tip plata</span>
-              <select className="field" name="category" defaultValue={PaymentPlanCategory.CASCO} required>
-                {Object.values(PaymentPlanCategory).map((category) => <option key={category} value={category}>{paymentPlanCategoryLabels[category]}</option>)}
-              </select>
-            </label>
-            <label><span className="label">Total</span><input className="field" name="totalAmount" required /></label>
-            <label><span className="label">Rate</span><input className="field" name="totalInstallments" type="number" min="1" defaultValue={12} required /></label>
-            <label><span className="label">Rata</span><input className="field" name="installmentAmount" placeholder="Auto" /></label>
-            <label>
-              <span className="label">Frecventa</span>
-              <select className="field" name="frequency" defaultValue={PaymentFrequency.MONTHLY}>
-                {Object.values(PaymentFrequency).map((frequency) => <option key={frequency} value={frequency}>{paymentFrequencyLabels[frequency]}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="label">Moneda</span>
-              <select className="field" name="currency" defaultValue="RON">
-                <option value="RON">RON</option>
-                <option value="EUR">EUR</option>
-              </select>
-            </label>
-            <button className="btn size-11 self-end px-0" type="submit" title="Adauga"><Plus className="size-6" /></button>
-            <label><span className="label">Prima plata</span><input className="field" name="firstPaymentDate" type="date" required /></label>
-            <label><span className="label">Notificare</span><input className="field" name="reminderDays" type="number" min="0" defaultValue={7} /></label>
-            <label className="md:col-span-5"><span className="label">Note</span><input className="field" name="notes" /></label>
-          </form>
-        </details>
-      </section>
+      )}
     </AppShell>
   );
 }

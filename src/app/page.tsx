@@ -11,8 +11,8 @@ import { documentLabels, expenseLabels } from "@/lib/labels";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const users = await prisma.user.count();
-  if (users === 0) redirect("/setup");
+  const admins = await prisma.user.count({ where: { role: "ADMIN" } });
+  if (admins === 0) redirect("/setup");
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");

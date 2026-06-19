@@ -8,8 +8,8 @@ import { LoginForm } from "./login-form";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const users = await prisma.user.count();
-  if (users === 0) redirect("/setup");
+  const admins = await prisma.user.count({ where: { role: "ADMIN" } });
+  if (admins === 0) redirect("/setup");
 
   const session = await getServerSession(authOptions);
   if (session) redirect("/");

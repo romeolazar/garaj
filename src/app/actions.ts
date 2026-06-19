@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
 import { addMonths } from "date-fns";
-import { DocumentType, ExpenseCategory, FuelType, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus, Role } from "@prisma/client";
+import { DocumentType, ExpenseCategory, FuelType, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus, Role, TireType } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { rebuildDocumentReminders } from "@/lib/reminders";
@@ -235,8 +235,8 @@ async function requireVehicleAccess(vehicleId: string) {
 }
 
 export async function createInitialAdmin(formData: FormData) {
-  const users = await prisma.user.count();
-  if (users > 0) redirect("/login");
+  const admins = await prisma.user.count({ where: { role: Role.ADMIN } });
+  if (admins > 0) redirect("/login");
 
   const email = text(formData, "email")?.toLowerCase();
   const password = text(formData, "password");
@@ -379,7 +379,7 @@ export async function addVehicleDocument(vehicleId: string, formData: FormData) 
     ? calculatedValidUntil(issuedAt, validityMonths, paymentFrequency)
     : issuedAt && validityMonths ? addMonths(issuedAt, validityMonths) : dateValue(formData, "validUntil");
 
-  if (!type || !validUntil) redirect(`/vehicles/${vehicleId}?error=document`);
+  if (!type || !validUntil) redirect(`/vehicles/${vehicleId}?tab=registru&error=document`);
 
   const document = await prisma.vehicleDocument.create({
     data: {
@@ -397,7 +397,7 @@ export async function addVehicleDocument(vehicleId: string, formData: FormData) 
 
   await rebuildDocumentReminders(document.id);
   revalidatePath(`/vehicles/${vehicleId}`);
-  redirect(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?tab=registru`);
 }
 
 export async function updateVehicleDocument(documentId: string, formData: FormData) {
@@ -413,7 +413,7 @@ export async function updateVehicleDocument(documentId: string, formData: FormDa
     ? calculatedValidUntil(issuedAt, validityMonths, paymentFrequency)
     : issuedAt && validityMonths ? addMonths(issuedAt, validityMonths) : dateValue(formData, "validUntil");
 
-  if (!type || !validUntil) redirect(`/vehicles/${current.vehicleId}?error=document`);
+  if (!type || !validUntil) redirect(`/vehicles/${current.vehicleId}?tab=registru&error=document`);
 
   const document = await prisma.vehicleDocument.update({
     where: { id: documentId },
@@ -430,7 +430,7 @@ export async function updateVehicleDocument(documentId: string, formData: FormDa
 
   await rebuildDocumentReminders(document.id);
   revalidatePath(`/vehicles/${document.vehicleId}`);
-  redirect(`/vehicles/${document.vehicleId}`);
+  redirect(`/vehicles/${document.vehicleId}?tab=registru`);
 }
 
 export async function deleteVehicleDocument(documentId: string) {
@@ -440,7 +440,7 @@ export async function deleteVehicleDocument(documentId: string) {
 
   await prisma.vehicleDocument.delete({ where: { id: documentId } });
   revalidatePath(`/vehicles/${document.vehicleId}`);
-  redirect(`/vehicles/${document.vehicleId}`);
+  redirect(`/vehicles/${document.vehicleId}?tab=registru`);
 }
 
 export async function addExpense(vehicleId: string, formData: FormData) {
@@ -450,7 +450,7 @@ export async function addExpense(vehicleId: string, formData: FormData) {
   const amount = decimalValue(formData, "amount");
   const occurredAt = dateValue(formData, "occurredAt");
 
-  if (!category || !amount || !occurredAt) redirect(`/vehicles/${vehicleId}?error=expense`);
+  if (!category || !amount || !occurredAt) redirect(`/vehicles/${vehicleId}?tab=cheltuieli&error=expense`);
 
   await prisma.expense.create({
     data: {
@@ -465,7 +465,7 @@ export async function addExpense(vehicleId: string, formData: FormData) {
 
   revalidatePath(`/vehicles/${vehicleId}`);
   revalidatePath("/");
-  redirect(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?tab=cheltuieli`);
 }
 
 export async function updateExpense(expenseId: string, formData: FormData) {
@@ -477,7 +477,7 @@ export async function updateExpense(expenseId: string, formData: FormData) {
   const amount = decimalValue(formData, "amount");
   const occurredAt = dateValue(formData, "occurredAt");
 
-  if (!category || !amount || !occurredAt) redirect(`/vehicles/${current.vehicleId}?error=expense`);
+  if (!category || !amount || !occurredAt) redirect(`/vehicles/${current.vehicleId}?tab=cheltuieli&error=expense`);
 
   await prisma.expense.update({
     where: { id: expenseId },
@@ -492,7 +492,7 @@ export async function updateExpense(expenseId: string, formData: FormData) {
 
   revalidatePath(`/vehicles/${current.vehicleId}`);
   revalidatePath("/");
-  redirect(`/vehicles/${current.vehicleId}`);
+  redirect(`/vehicles/${current.vehicleId}?tab=cheltuieli`);
 }
 
 export async function deleteExpense(expenseId: string) {
@@ -503,7 +503,7 @@ export async function deleteExpense(expenseId: string) {
   await prisma.expense.delete({ where: { id: expenseId } });
   revalidatePath(`/vehicles/${expense.vehicleId}`);
   revalidatePath("/");
-  redirect(`/vehicles/${expense.vehicleId}`);
+  redirect(`/vehicles/${expense.vehicleId}?tab=cheltuieli`);
 }
 
 export async function createPaymentPlan(vehicleId: string, formData: FormData) {
@@ -519,7 +519,7 @@ export async function createPaymentPlan(vehicleId: string, formData: FormData) {
   const reminderDays = intValue(formData, "reminderDays") ?? 7;
 
   if (!category || !frequency || !name || !totalAmount || !totalInstallments || !firstPaymentDate) {
-    redirect(`/vehicles/${vehicleId}?error=payment-plan`);
+    redirect(`/vehicles/${vehicleId}?tab=rate&error=payment-plan`);
   }
 
   const providedInstallment = decimalValue(formData, "installmentAmount");
@@ -553,7 +553,7 @@ export async function createPaymentPlan(vehicleId: string, formData: FormData) {
   });
 
   revalidatePath(`/vehicles/${vehicleId}`);
-  redirect(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?tab=rate`);
 }
 
 export async function updatePaymentPlan(planId: string, formData: FormData) {
@@ -575,7 +575,7 @@ export async function updatePaymentPlan(planId: string, formData: FormData) {
   const reminderDays = intValue(formData, "reminderDays") ?? 7;
 
   if (!category || !frequency || !status || !name || !totalAmount || !totalInstallments || !firstPaymentDate) {
-    redirect(`/vehicles/${current.vehicleId}?error=payment-plan`);
+    redirect(`/vehicles/${current.vehicleId}?tab=rate&error=payment-plan`);
   }
 
   const providedInstallment = decimalValue(formData, "installmentAmount");
@@ -614,7 +614,7 @@ export async function updatePaymentPlan(planId: string, formData: FormData) {
 
   await syncPaymentPlanStatus(planId);
   revalidatePath(`/vehicles/${current.vehicleId}`);
-  redirect(`/vehicles/${current.vehicleId}`);
+  redirect(`/vehicles/${current.vehicleId}?tab=rate`);
 }
 
 export async function deletePaymentPlan(planId: string) {
@@ -624,7 +624,7 @@ export async function deletePaymentPlan(planId: string) {
 
   await prisma.paymentPlan.delete({ where: { id: planId } });
   revalidatePath(`/vehicles/${plan.vehicleId}`);
-  redirect(`/vehicles/${plan.vehicleId}`);
+  redirect(`/vehicles/${plan.vehicleId}?tab=rate`);
 }
 
 export async function markInstallmentPaid(installmentId: string) {
@@ -640,7 +640,7 @@ export async function markInstallmentPaid(installmentId: string) {
 
   await syncPaymentPlanStatus(installment.paymentPlanId);
   revalidatePath(`/vehicles/${installment.paymentPlan.vehicleId}`);
-  redirect(`/vehicles/${installment.paymentPlan.vehicleId}`);
+  redirect(`/vehicles/${installment.paymentPlan.vehicleId}?tab=rate`);
 }
 
 export async function markInstallmentUnpaid(installmentId: string) {
@@ -656,7 +656,7 @@ export async function markInstallmentUnpaid(installmentId: string) {
 
   await syncPaymentPlanStatus(installment.paymentPlanId);
   revalidatePath(`/vehicles/${installment.paymentPlan.vehicleId}`);
-  redirect(`/vehicles/${installment.paymentPlan.vehicleId}`);
+  redirect(`/vehicles/${installment.paymentPlan.vehicleId}?tab=rate`);
 }
 
 export async function updatePaymentInstallment(installmentId: string, formData: FormData) {
@@ -670,7 +670,7 @@ export async function updatePaymentInstallment(installmentId: string, formData: 
   const amount = decimalValue(formData, "amount");
   const dueDate = dateValue(formData, "dueDate");
   const status = enumValue(PaymentInstallmentStatus, text(formData, "status")) as PaymentInstallmentStatus | undefined;
-  if (!amount || !dueDate || !status) redirect(`/vehicles/${current.paymentPlan.vehicleId}?error=installment`);
+  if (!amount || !dueDate || !status) redirect(`/vehicles/${current.paymentPlan.vehicleId}?tab=rate&error=installment`);
 
   await prisma.paymentInstallment.update({
     where: { id: installmentId },
@@ -685,7 +685,7 @@ export async function updatePaymentInstallment(installmentId: string, formData: 
 
   await syncPaymentPlanStatus(current.paymentPlanId);
   revalidatePath(`/vehicles/${current.paymentPlan.vehicleId}`);
-  redirect(`/vehicles/${current.paymentPlan.vehicleId}`);
+  redirect(`/vehicles/${current.paymentPlan.vehicleId}?tab=rate`);
 }
 
 export async function deleteVehicle(vehicleId: string) {
@@ -715,6 +715,56 @@ export async function importJsonData(formData: FormData) {
   }
 
   const root = objectValue(payload);
+  const usersList = arrayValue(root?.users);
+
+  for (const userItem of usersList) {
+    const email = stringValue(userItem.email)?.toLowerCase();
+    const firstName = stringValue(userItem.firstName) ?? "Driver";
+    const lastName = stringValue(userItem.lastName) ?? "User";
+    const profileImageUrl = stringValue(userItem.profileImageUrl) ?? null;
+    const licenseCategory = stringValue(userItem.licenseCategory) ?? null;
+    const licenseIssuedAt = dateImportValue(userItem.licenseIssuedAt) ?? null;
+    const licenseExpiresAt = dateImportValue(userItem.licenseExpiresAt) ?? null;
+    const idCardIssuedAt = dateImportValue(userItem.idCardIssuedAt) ?? null;
+    const idCardExpiresAt = dateImportValue(userItem.idCardExpiresAt) ?? null;
+    const role = stringValue(userItem.role) === "ADMIN" ? Role.ADMIN : Role.DRIVER;
+
+    if (!email) continue;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      await prisma.user.update({
+        where: { email },
+        data: {
+          firstName,
+          lastName,
+          profileImageUrl,
+          licenseCategory,
+          licenseIssuedAt,
+          licenseExpiresAt,
+          idCardIssuedAt,
+          idCardExpiresAt
+        }
+      });
+    } else {
+      await prisma.user.create({
+        data: {
+          email,
+          firstName,
+          lastName,
+          role,
+          profileImageUrl,
+          licenseCategory,
+          licenseIssuedAt,
+          licenseExpiresAt,
+          idCardIssuedAt,
+          idCardExpiresAt,
+          passwordHash: await bcrypt.hash("SchimbaMa123!", 10)
+        }
+      });
+    }
+  }
+
   const vehicles = arrayValue(root?.vehicles);
 
   if (vehicles.length === 0) {
@@ -728,8 +778,55 @@ export async function importJsonData(formData: FormData) {
 
     if (!plateNumber || !make || !model) continue;
 
-    const driverId = stringValue(item.driverId);
-    const driver = driverId ? await prisma.user.findUnique({ where: { id: driverId } }) : null;
+    const driverObj = objectValue(item.driver);
+    let driver: any = null;
+    if (driverObj) {
+      const email = stringValue(driverObj.email)?.toLowerCase();
+      const firstName = stringValue(driverObj.firstName) ?? "Driver";
+      const lastName = stringValue(driverObj.lastName) ?? "User";
+      const profileImageUrl = stringValue(driverObj.profileImageUrl) ?? null;
+      const licenseCategory = stringValue(driverObj.licenseCategory) ?? null;
+      const licenseIssuedAt = dateImportValue(driverObj.licenseIssuedAt) ?? null;
+      const licenseExpiresAt = dateImportValue(driverObj.licenseExpiresAt) ?? null;
+      const idCardIssuedAt = dateImportValue(driverObj.idCardIssuedAt) ?? null;
+      const idCardExpiresAt = dateImportValue(driverObj.idCardExpiresAt) ?? null;
+      const role = stringValue(driverObj.role) === "ADMIN" ? Role.ADMIN : Role.DRIVER;
+
+      if (email) {
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (existingUser) {
+          driver = await prisma.user.update({
+            where: { email },
+            data: {
+              firstName,
+              lastName,
+              profileImageUrl,
+              licenseCategory,
+              licenseIssuedAt,
+              licenseExpiresAt,
+              idCardIssuedAt,
+              idCardExpiresAt
+            }
+          });
+        } else {
+          driver = await prisma.user.create({
+            data: {
+              email,
+              firstName,
+              lastName,
+              role,
+              profileImageUrl,
+              licenseCategory,
+              licenseIssuedAt,
+              licenseExpiresAt,
+              idCardIssuedAt,
+              idCardExpiresAt,
+              passwordHash: await bcrypt.hash("SchimbaMa123!", 10)
+            }
+          });
+        }
+      }
+    }
     const fallbackDriverId = currentUser.role === Role.ADMIN ? currentUser.id : null;
     const existing = await prisma.vehicle.findUnique({ where: { plateNumber } });
 
@@ -877,60 +974,30 @@ export async function importJsonData(formData: FormData) {
   redirect("/vehicles?import=ok");
 }
 
-export async function updateProfile(formData: FormData) {
-  const session = await requireSession();
-  const email = text(formData, "email")?.toLowerCase();
-  if (!email) redirect("/settings?error=email");
-
-  const currentPassword = text(formData, "currentPassword");
-  const newPassword = text(formData, "newPassword");
-  const confirmPassword = text(formData, "confirmPassword");
-  let passwordHash: string | undefined;
-
-  if (currentPassword || newPassword || confirmPassword) {
-    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { passwordHash: true } });
-    if (!user || !currentPassword || !newPassword || newPassword.length < 8 || newPassword !== confirmPassword) {
-      redirect("/settings?password=invalid");
-    }
-
-    const validCurrentPassword = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!validCurrentPassword) redirect("/settings?password=current");
-
-    passwordHash = await bcrypt.hash(newPassword, 10);
-  }
-
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: {
-      email,
-      firstName: text(formData, "firstName") ?? "",
-      lastName: text(formData, "lastName") ?? "",
-      profileImageUrl: text(formData, "profileImageUrl"),
-      licenseCategory: text(formData, "licenseCategory"),
-      licenseIssuedAt: dateValue(formData, "licenseIssuedAt"),
-      licenseExpiresAt: dateValue(formData, "licenseExpiresAt"),
-      idCardIssuedAt: dateValue(formData, "idCardIssuedAt"),
-      idCardExpiresAt: dateValue(formData, "idCardExpiresAt"),
-      ...(passwordHash ? { passwordHash } : {})
-    }
-  });
-
-  revalidatePath("/settings");
-  revalidatePath("/");
-}
-
 export async function createUser(formData: FormData) {
   const session = await requireSession();
   if (session.user.role !== "ADMIN") redirect("/");
 
   const email = text(formData, "email")?.toLowerCase();
   const password = text(formData, "password");
+  const confirmPassword = text(formData, "confirmPassword");
   const firstName = text(formData, "firstName");
   const lastName = text(formData, "lastName");
   const role = text(formData, "role") === "ADMIN" ? Role.ADMIN : Role.DRIVER;
 
   if (!email || !password || !firstName || !lastName || password.length < 8) {
     redirect("/users?error=invalid");
+  }
+
+  if (password !== confirmPassword) {
+    redirect("/users?error=password-mismatch");
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email }
+  });
+  if (existingUser) {
+    redirect("/users?error=email-exists");
   }
 
   await prisma.user.create({
@@ -955,9 +1022,26 @@ export async function updateUser(userId: string, formData: FormData) {
   const lastName = text(formData, "lastName");
   const role = text(formData, "role") === "ADMIN" ? Role.ADMIN : Role.DRIVER;
   const password = text(formData, "password");
+  const confirmPassword = text(formData, "confirmPassword");
 
   if (!email || !firstName || !lastName) {
     redirect(`/users/${userId}/edit?error=invalid`);
+  }
+
+  if (password) {
+    if (password.length < 8) {
+      redirect(`/users/${userId}/edit?error=invalid`);
+    }
+    if (password !== confirmPassword) {
+      redirect(`/users/${userId}/edit?error=password-mismatch`);
+    }
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email }
+  });
+  if (existingUser && existingUser.id !== userId) {
+    redirect(`/users/${userId}/edit?error=email-exists`);
   }
 
   await prisma.user.update({
@@ -1079,4 +1163,140 @@ export async function testEmailConfiguration() {
   }
 
   redirect("/settings?email=ok");
+}
+
+export async function dismissReminder(reminderId: string) {
+  await requireSession();
+  await prisma.reminder.update({
+    where: { id: reminderId },
+    data: { status: "DISMISSED" }
+  });
+  revalidatePath("/alerts");
+  revalidatePath("/");
+}
+
+export async function addServiceRecord(vehicleId: string, formData: FormData) {
+  await requireVehicleAccess(vehicleId);
+
+  const servicedAt = dateValue(formData, "servicedAt");
+  const cost = decimalValue(formData, "cost");
+
+  if (!servicedAt || !cost) redirect(`/vehicles/${vehicleId}?tab=revizii&error=service`);
+
+  await prisma.serviceRecord.create({
+    data: {
+      vehicleId,
+      servicedAt,
+      odometerKm: intValue(formData, "odometerKm"),
+      cost,
+      notes: text(formData, "notes")
+    }
+  });
+
+  revalidatePath(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?tab=revizii`);
+}
+
+export async function updateServiceRecord(recordId: string, formData: FormData) {
+  const current = await prisma.serviceRecord.findUnique({ where: { id: recordId } });
+  if (!current) redirect("/");
+  await requireVehicleAccess(current.vehicleId);
+
+  const servicedAt = dateValue(formData, "servicedAt");
+  const cost = decimalValue(formData, "cost");
+
+  if (!servicedAt || !cost) redirect(`/vehicles/${current.vehicleId}?tab=revizii&error=service`);
+
+  await prisma.serviceRecord.update({
+    where: { id: recordId },
+    data: {
+      servicedAt,
+      odometerKm: nullableInt(formData, "odometerKm"),
+      cost,
+      notes: text(formData, "notes")
+    }
+  });
+
+  revalidatePath(`/vehicles/${current.vehicleId}`);
+  redirect(`/vehicles/${current.vehicleId}?tab=revizii`);
+}
+
+export async function deleteServiceRecord(recordId: string) {
+  const current = await prisma.serviceRecord.findUnique({ where: { id: recordId } });
+  if (!current) redirect("/");
+  await requireVehicleAccess(current.vehicleId);
+
+  await prisma.serviceRecord.delete({ where: { id: recordId } });
+  revalidatePath(`/vehicles/${current.vehicleId}`);
+  redirect(`/vehicles/${current.vehicleId}?tab=revizii`);
+}
+
+export async function addTireSet(vehicleId: string, formData: FormData) {
+  await requireVehicleAccess(vehicleId);
+
+  const type = text(formData, "type") as TireType | undefined;
+  const brand = text(formData, "brand");
+  const size = text(formData, "size");
+  const purchasedAt = dateValue(formData, "purchasedAt");
+
+  if (!type || !brand || !size || !purchasedAt) {
+    redirect(`/vehicles/${vehicleId}?tab=anvelope&error=tires`);
+  }
+
+  await prisma.tireSet.create({
+    data: {
+      vehicleId,
+      type,
+      brand,
+      model: text(formData, "model"),
+      size,
+      cost: decimalValue(formData, "cost"),
+      purchasedAt,
+      notes: text(formData, "notes")
+    }
+  });
+
+  revalidatePath(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?tab=anvelope`);
+}
+
+export async function updateTireSet(tireSetId: string, formData: FormData) {
+  const current = await prisma.tireSet.findUnique({ where: { id: tireSetId } });
+  if (!current) redirect("/");
+  await requireVehicleAccess(current.vehicleId);
+
+  const type = text(formData, "type") as TireType | undefined;
+  const brand = text(formData, "brand");
+  const size = text(formData, "size");
+  const purchasedAt = dateValue(formData, "purchasedAt");
+
+  if (!type || !brand || !size || !purchasedAt) {
+    redirect(`/vehicles/${current.vehicleId}?tab=anvelope&error=tires`);
+  }
+
+  await prisma.tireSet.update({
+    where: { id: tireSetId },
+    data: {
+      type,
+      brand,
+      model: text(formData, "model"),
+      size,
+      cost: nullableDecimal(formData, "cost"),
+      purchasedAt,
+      notes: text(formData, "notes")
+    }
+  });
+
+  revalidatePath(`/vehicles/${current.vehicleId}`);
+  redirect(`/vehicles/${current.vehicleId}?tab=anvelope`);
+}
+
+export async function deleteTireSet(tireSetId: string) {
+  const current = await prisma.tireSet.findUnique({ where: { id: tireSetId } });
+  if (!current) redirect("/");
+  await requireVehicleAccess(current.vehicleId);
+
+  await prisma.tireSet.delete({ where: { id: tireSetId } });
+  revalidatePath(`/vehicles/${current.vehicleId}`);
+  redirect(`/vehicles/${current.vehicleId}?tab=anvelope`);
 }

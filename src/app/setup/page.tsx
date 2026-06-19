@@ -6,8 +6,8 @@ import { createInitialAdmin } from "@/app/actions";
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
-  const users = await prisma.user.count();
-  if (users > 0) redirect("/login");
+  const admins = await prisma.user.count({ where: { role: "ADMIN" } });
+  if (admins > 0) redirect("/login");
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-5">

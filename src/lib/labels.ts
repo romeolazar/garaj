@@ -1,4 +1,4 @@
-import { DocumentType, ExpenseCategory, FuelType, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus, Role } from "@prisma/client";
+import { DocumentType, ExpenseCategory, FuelType, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus, Role, TireType } from "@prisma/client";
 
 export const documentLabels: Record<DocumentType, string> = {
   ITP: "ITP",
@@ -68,4 +68,10 @@ export const paymentInstallmentStatusLabels: Record<PaymentInstallmentStatus, st
   PAID: "Platita",
   UNPAID: "Neplatita",
   CANCELLED: "Anulata"
+};
+
+export const tireTypeLabels: Record<TireType, string> = {
+  SUMMER: "Vară",
+  WINTER: "Iarnă",
+  ALL_SEASON: "All Season"
 };
