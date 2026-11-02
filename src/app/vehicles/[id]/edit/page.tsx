@@ -79,6 +79,17 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
           <label className="mt-4 block"><span className="label">Note</span><textarea className="field min-h-36" name="notes" defaultValue={vehicle.notes ?? ""} /></label>
         </section>
 
+        <section className="panel p-5">
+          <h2 className="mb-5 text-xl font-black">Dotări, baterie și mementouri</h2>
+          <label className="block"><span className="label">Dotări (una pe rând)</span><textarea className="field min-h-28" name="equipment" defaultValue={vehicle.equipment ?? ""} placeholder={"Autopilot\nJante 18\"\nPachet iarnă"} /></label>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label><span className="label">Capacitate baterie kWh</span><input className="field" name="batteryCapacityKwh" inputMode="decimal" defaultValue={vehicle.batteryCapacityKwh ?? ""} placeholder="doar electrice" /></label>
+            <label><span className="label">Garanție baterie până la</span><input className="field" name="batteryWarrantyUntil" type="date" defaultValue={dateInput(vehicle.batteryWarrantyUntil)} /></label>
+            <label><span className="label">Garanție baterie km</span><input className="field" name="batteryWarrantyKm" type="number" defaultValue={vehicle.batteryWarrantyKm ?? ""} /></label>
+          </div>
+          <label className="mt-4 flex items-center gap-3"><input type="checkbox" className="switch" name="remindersEnabled" defaultChecked={vehicle.remindersEnabled} /><span>Mementouri active pentru această mașină</span></label>
+        </section>
+
         <div className="flex justify-end gap-3">
           <Link href={`/vehicles/${vehicle.id}`} className="btn-secondary">Anuleaza</Link>
           <button className="btn" type="submit">Salveaza modificarile</button>

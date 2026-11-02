@@ -11,6 +11,14 @@ export function reminderDaysValue(value: Prisma.JsonValue): number[] {
   return value.map(Number).filter(Number.isFinite);
 }
 
+// Reminders go out at the configured time of day, `days` before the deadline.
+export function reminderTime(date: Date, days: number, notificationTime: string) {
+  const notifyAt = addDays(date, -days);
+  const match = notificationTime.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  notifyAt.setHours(match ? Number(match[1]) : 9, match ? Number(match[2]) : 0, 0, 0);
+  return notifyAt;
+}
+
 export async function rebuildDocumentReminders(documentId: string) {
   const document = await prisma.vehicleDocument.findUnique({
     where: { id: documentId },
@@ -19,6 +27,7 @@ export async function rebuildDocumentReminders(documentId: string) {
 
   if (!document) return;
 
+  const settings = await prisma.appSetting.findUnique({ where: { id: "default" }, select: { notificationTime: true } });
   await prisma.reminder.deleteMany({ where: { documentId } });
 
   await prisma.reminder.createMany({
@@ -27,7 +36,7 @@ export async function rebuildDocumentReminders(documentId: string) {
       documentId,
       title: `${documentLabels[document.type]} expira pentru ${document.vehicle.plateNumber}`,
       dueAt: document.validUntil,
-      notifyAt: addDays(document.validUntil, -days)
+      notifyAt: reminderTime(document.validUntil, days, settings?.notificationTime ?? "09:00")
     }))
   });
 }

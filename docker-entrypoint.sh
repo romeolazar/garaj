@@ -15,5 +15,6 @@ if [ -z "$NEXTAUTH_SECRET" ]; then
 fi
 
 npx prisma migrate deploy
+npm run prisma:init
 
 exec node_modules/.bin/next start -p "$PORT"

@@ -127,6 +127,11 @@ model Vehicle {
   notes                 String?
   imageUrl              String?
   backgroundImageUrl    String?
+  remindersEnabled      Boolean   @default(true)
+  equipment             String?
+  batteryCapacityKwh    Float?
+  batteryWarrantyUntil  DateTime?
+  batteryWarrantyKm     Int?
   driverId              String?
   createdById           String
   createdAt             DateTime  @default(now())
@@ -185,9 +190,35 @@ model Expense {
   occurredAt  DateTime
   odometerKm  Int?
   notes       String?
+  categoryConfigId String?
+  quantity    Float?
+  unitPrice   Decimal?
+  socStart    Int?
+  socEnd      Int?
+  durationMin Int?
+  station     String?
+  importKey   String?
   createdAt   DateTime        @default(now())
 
   vehicle     Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  categoryConfig ExpenseCategoryConfig? @relation(fields: [categoryConfigId], references: [id], onDelete: SetNull)
+
+  @@unique([vehicleId, importKey])
+  @@index([categoryConfigId])
+}
+
+model ExpenseCategoryConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  color     String
+  icon      String   @default("tag")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses  Expense[]
 }
 
 model PaymentPlan {
@@ -237,6 +268,8 @@ model ServiceRecord {
   vehicleId   String
   servicedAt  DateTime
   odometerKm  Int?
+  nextServiceAtKm    Int?
+  odometerNotifiedAt DateTime?
   cost        Decimal
   notes       String?
   createdAt   DateTime  @default(now())
@@ -262,6 +295,12 @@ model TireSet {
 model AppSetting {
   id               String   @id @default(cuid())
   theme            String   @default("system")
+  dateFormat       String   @default("system")
+  notificationsEnabled Boolean @default(true)
+  notificationTime String   @default("09:00")
+  highPriorityDays Int      @default(14)
+  odometerReminderKm Int    @default(500)
+  dismissedAlerts  Json     @default("[]")
   telegramBotToken String?
   telegramChatId   String?
   smtpHost         String?

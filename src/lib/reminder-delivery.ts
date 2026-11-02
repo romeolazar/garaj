@@ -1,117 +1,66 @@
 import { prisma } from "./prisma";
-import nodemailer from "nodemailer";
+import { odometerReminderForVehicle } from "./odometer-reminders";
+
+const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+async function sendTelegram(token: string, chatId: string, html: string) {
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: "HTML" })
+  });
+  if (!response.ok) console.error("[reminders] Telegram error:", await response.text());
+  return response.ok;
+}
 
 export async function deliverDueReminders() {
   const settings = await prisma.appSetting.findUnique({ where: { id: "default" } });
-  
-  const due = await prisma.reminder.findMany({
-    where: { status: "PENDING", notifyAt: { lte: new Date() } },
-    include: {
-      vehicle: {
-        include: {
-          driver: true,
-          createdBy: true
-        }
-      }
-    },
-    orderBy: { notifyAt: "asc" }
-  });
-
-  if (due.length === 0) {
-    console.log("[reminders] No pending reminders due.");
+  if (settings?.notificationsEnabled === false) {
+    console.log("[reminders] Notifications are disabled; in-app alerts are kept.");
+    return;
+  }
+  const token = settings?.telegramBotToken;
+  const chatId = settings?.telegramChatId;
+  if (!token || !chatId) {
+    console.log("[reminders] Telegram not configured; reminders stay pending.");
     return;
   }
 
-  console.log(`[reminders] Found ${due.length} pending reminders due.`);
-
-  // Setup email transporter if credentials exist
-  let transporter: any = null;
-  if (settings?.smtpUser && settings?.smtpPassword) {
-    transporter = nodemailer.createTransport({
-      host: settings.smtpHost || "smtp.gmail.com",
-      port: settings.smtpPort || 465,
-      secure: true,
-      auth: {
-        user: settings.smtpUser,
-        pass: settings.smtpPassword
-      }
-    });
-    console.log("[reminders] Email SMTP transporter configured.");
-  } else {
-    console.log("[reminders] Email SMTP not configured.");
-  }
-
-  const telegramEnabled = !!(settings?.telegramBotToken && settings?.telegramChatId);
-  if (telegramEnabled) {
-    console.log("[reminders] Telegram notifications enabled.");
-  } else {
-    console.log("[reminders] Telegram notifications not configured.");
-  }
+  const due = await prisma.reminder.findMany({
+    where: { status: "PENDING", notifyAt: { lte: new Date() }, vehicle: { remindersEnabled: true } },
+    include: { vehicle: true },
+    orderBy: { notifyAt: "asc" }
+  });
+  console.log(`[reminders] ${due.length} reminders due.`);
 
   for (const reminder of due) {
-    let emailSent = false;
-    let telegramSent = false;
-
-    // 1. Send Email
-    if (transporter) {
-      const recipientEmails = new Set<string>();
-      if (reminder.vehicle.driver?.email) {
-        recipientEmails.add(reminder.vehicle.driver.email);
+    const v = reminder.vehicle;
+    const text = `⚠️ <b>Alertă Garaj</b>\n\n<b>${escapeHtml(reminder.title)}</b>\n🚗 ${escapeHtml(`${v.make} ${v.model} · ${v.plateNumber}`)}\n📅 Scadență: ${reminder.dueAt.toLocaleDateString("ro-RO")}`;
+    try {
+      if (await sendTelegram(token, chatId, text)) {
+        await prisma.reminder.update({ where: { id: reminder.id }, data: { status: "SENT" } });
       }
-      if (reminder.vehicle.createdBy.email) {
-        recipientEmails.add(reminder.vehicle.createdBy.email);
-      }
-
-      if (recipientEmails.size > 0) {
-        try {
-          const emails = Array.from(recipientEmails);
-          await transporter.sendMail({
-            from: settings?.smtpFrom || settings?.smtpUser,
-            to: emails.join(", "),
-            subject: `Alertă Garaj: ${reminder.title}`,
-            text: `Mesaj de la aplicația Garaj:\n\n${reminder.title}\nVehicul: ${reminder.vehicle.plateNumber} (${reminder.vehicle.make} ${reminder.vehicle.model})\nDată scadență: ${reminder.dueAt.toLocaleDateString("ro-RO")}\n\nTe rugăm să verifici detaliile în aplicație.`
-          });
-          console.log(`[reminders] Email sent for reminder "${reminder.title}" to ${emails.join(", ")}`);
-          emailSent = true;
-        } catch (error) {
-          console.error(`[reminders] Failed to send email for reminder "${reminder.title}":`, error);
-        }
-      }
+    } catch (error) {
+      console.error(`[reminders] Failed to send "${reminder.title}":`, error);
     }
+  }
 
-    // 2. Send Telegram
-    if (telegramEnabled && settings) {
-      try {
-        const messageText = `⚠️ *Alertă Garaj*\n\n*${reminder.title}*\n🚗 Vehicul: \`${reminder.vehicle.plateNumber}\` (${reminder.vehicle.make} ${reminder.vehicle.model})\n📅 Scadență: ${reminder.dueAt.toLocaleDateString("ro-RO")}`;
-        const response = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            chat_id: settings.telegramChatId,
-            text: messageText,
-            parse_mode: "Markdown"
-          })
-        });
-        if (response.ok) {
-          console.log(`[reminders] Telegram message sent for reminder "${reminder.title}"`);
-          telegramSent = true;
-        } else {
-          const errText = await response.text();
-          console.error(`[reminders] Telegram response error for reminder "${reminder.title}":`, errText);
-        }
-      } catch (error) {
-        console.error(`[reminders] Failed to send Telegram notification for "${reminder.title}":`, error);
+  // Service due by odometer: notify once per service record when the threshold is reached.
+  const vehicles = await prisma.vehicle.findMany({
+    where: { remindersEnabled: true, services: { some: { nextServiceAtKm: { not: null }, odometerNotifiedAt: null } } },
+    include: { expenses: { select: { odometerKm: true } }, services: true }
+  });
+  for (const vehicle of vehicles) {
+    const alert = odometerReminderForVehicle(vehicle, settings?.odometerReminderKm ?? 500);
+    if (!alert || alert.service.odometerNotifiedAt) continue;
+    const remaining = alert.isOverdue ? `${Math.abs(alert.remainingKm).toLocaleString("ro-RO")} km peste termen` : `${alert.remainingKm.toLocaleString("ro-RO")} km rămași`;
+    const text = `🔧 <b>Revizie la ${alert.targetOdometer.toLocaleString("ro-RO")} km</b>\n🚗 ${escapeHtml(`${vehicle.make} ${vehicle.model} · ${vehicle.plateNumber}`)}\n📍 Kilometraj curent: ${alert.currentOdometer.toLocaleString("ro-RO")} km · ${remaining}`;
+    try {
+      if (await sendTelegram(token, chatId, text)) {
+        await prisma.serviceRecord.update({ where: { id: alert.service.id }, data: { odometerNotifiedAt: new Date() } });
       }
-    }
-
-    // 3. Update status to SENT if either succeeded, or if neither is configured (to avoid looping on empty configs)
-    const shouldMarkSent = emailSent || telegramSent || (!transporter && !telegramEnabled);
-    if (shouldMarkSent) {
-      await prisma.reminder.update({
-        where: { id: reminder.id },
-        data: { status: "SENT" }
-      });
-      console.log(`[reminders] Reminder "${reminder.title}" marked as SENT.`);
+    } catch (error) {
+      console.error(`[reminders] Failed to send odometer alert for ${vehicle.plateNumber}:`, error);
     }
   }
 }

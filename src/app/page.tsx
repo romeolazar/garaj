@@ -1,240 +1,172 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { AlertTriangle, Car, FileCheck2, Gauge, LayoutGrid, List, Plus, ReceiptText, Rows3, Warehouse, type LucideIcon } from "lucide-react";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { formatCurrency, formatDate, formatKilometers } from "@/lib/format";
+import { Battery, ChartLine, ChevronDown, FolderOpen, Fuel, Info, LayoutGrid, LifeBuoy, Plus, SlidersHorizontal, UsersRound, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { documentLabels, expenseLabels } from "@/lib/labels";
+import { AddCostModal } from "@/components/dashboard/forms";
+import { PANELS } from "@/components/dashboard/panels";
+import { AppLogo } from "@/components/ui/app-logo";
+import { Avatar } from "@/components/ui/avatar";
+import { CatBadge } from "@/components/ui/icons";
+import { Plate } from "@/components/ui/plate";
+import { costEntries, currentKm, docStatus, documentLabel, fmtDate, horsePower, km, latestDocuments, money, type GarageVehicle } from "@/lib/garage";
+import { loadGarage, type GarageContext } from "@/lib/garage-data";
+import { fuelLabels } from "@/lib/labels";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+const TABS = [
+  ["general", "Date generale", Info],
+  ["registry", "Registru", FolderOpen],
+  ["costs", "Costuri", Wallet],
+  ["stats", "Statistici", ChartLine],
+  ["fuel", "Combustibil", Fuel],
+  ["tires", "Anvelope", LifeBuoy],
+  ["battery", "Baterie", Battery],
+  ["drivers", "Șoferi", UsersRound],
+  ["settings", "Setări", SlidersHorizontal]
+] as const;
+
+type TabKey = (typeof TABS)[number][0];
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ car?: string; tab?: string; year?: string; all?: string; error?: string }> }) {
   const admins = await prisma.user.count({ where: { role: "ADMIN" } });
   if (admins === 0) redirect("/setup");
 
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-  const { view: rawView } = await searchParams;
-  const view = rawView === "compact" || rawView === "card" ? rawView : "poster";
+  const ctx = await loadGarage();
+  const params = await searchParams;
+  const selected = params.car && ctx.vehicles.some((v) => v.id === params.car) ? params.car : "all";
+  const tab = TABS.some(([key]) => key === params.tab) ? (params.tab as TabKey) : null;
+  const cars = selected === "all" ? ctx.vehicles : ctx.vehicles.filter((v) => v.id === selected);
+  const href = (car: string, nextTab: string | null) => `/?car=${car}${nextTab ? `&tab=${nextTab}` : ""}`;
 
-  const vehicleWhere = session.user.role === "ADMIN" ? {} : { driverId: session.user.id };
-  const [vehicleCount, vehicles, recentExpenses] =
-    await Promise.all([
-      prisma.vehicle.count({ where: vehicleWhere }),
-      prisma.vehicle.findMany({
-        where: vehicleWhere,
-        orderBy: { createdAt: "desc" },
-        include: {
-          documents: { orderBy: { validUntil: "asc" } },
-          expenses: { orderBy: { occurredAt: "desc" } },
-          reminders: { where: { status: "PENDING", notifyAt: { lte: new Date() } }, orderBy: { dueAt: "asc" } }
-        }
-      }),
-      prisma.expense.findMany({ take: 4, where: { vehicle: vehicleWhere }, orderBy: { occurredAt: "desc" }, include: { vehicle: true } })
-    ]);
+  if (!ctx.vehicles.length) {
+    return (
+      <AppShell active="dashboard">
+        <section className="card empty-garage">
+          <span className="brand-mark" style={{ width: 64, height: 64 }}><AppLogo id="empty" /></span>
+          <h2 style={{ margin: 0 }}>Garajul e gol</h2>
+          <p style={{ margin: 0, color: "var(--muted)" }}>{ctx.isAdmin ? "Adaugă prima mașină sau importă un backup din Setări." : "Administratorul nu ți-a alocat încă o mașină."}</p>
+          {ctx.isAdmin ? <div style={{ display: "flex", gap: 8 }}><Link className="btn" href="/vehicles/new"><Plus className="i" />Adaugă mașină</Link><Link className="btn-secondary" href="/settings?section=backup">Importă backup</Link></div> : null}
+        </section>
+      </AppShell>
+    );
+  }
 
-  const vehicleMessage =
-    vehicleCount === 1 ? "Ai 1 vehicul in garaj." : `Ai ${vehicleCount} vehicule in garaj.`;
+  const Panel = tab ? PANELS[tab] : null;
 
   return (
-    <AppShell>
-      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="flex items-center gap-3 text-4xl font-black">
-            <Warehouse className="size-9 text-primary" />
-            Garajul meu
-          </h1>
-          <p className="mt-2 text-muted-foreground">{vehicleMessage}</p>
-        </div>
-        {session.user.role === "ADMIN" ? (
-          <Link className="btn" href="/vehicles/new">
-            <Plus className="size-4" />
-            Adauga vehicul
+    <AppShell active="dashboard">
+      {params.error ? <div className="notice bad">Formularul nu a fost salvat: verifică câmpurile obligatorii.</div> : null}
+      <section className="top-grid">
+        <div className="hero">{selected === "all" ? <Segments vehicles={ctx.vehicles} tab={tab} /> : <SingleHero vehicle={cars[0]} ctx={ctx} />}</div>
+        <aside className="side"><Activity ctx={ctx} cars={cars} all={selected === "all"} /></aside>
+      </section>
+
+      <section className="card carbar">
+        <Link className={`car-pill ${selected === "all" ? "active" : ""}`} href={href("all", tab)} scroll={false}>
+          <span className="all"><LayoutGrid className="i" /></span>
+          <span>Toate mașinile<small>{ctx.vehicles.length} {ctx.vehicles.length === 1 ? "vehicul" : "vehicule"}</small></span>
+        </Link>
+        {ctx.vehicles.map((v) => (
+          <Link key={v.id} className={`car-pill ${selected === v.id ? "active" : ""}`} href={href(v.id, tab)} scroll={false}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {v.imageUrl ? <img src={v.imageUrl} alt="" /> : <span className="all">{v.make[0]}</span>}
+            <span>{v.make} {v.model}<small>{v.plateNumber}</small></span>
           </Link>
-        ) : null}
-      </div>
-
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-2xl font-black">
-            <Car className="size-5 text-primary" />
-            Mașini
-          </h2>
-          <div className="flex rounded-md border border-border bg-muted/30 p-1 text-sm">
-            <ViewLink href="/?view=compact" active={view === "compact"} icon={List} label="Compact" />
-            <ViewLink href="/?view=card" active={view === "card"} icon={LayoutGrid} label="Card" />
-            <ViewLink href="/?view=poster" active={view === "poster"} icon={Rows3} label="Poster" />
-          </div>
-        </div>
-        {vehicles.length === 0 ? (
-          <div className="panel flex min-h-44 flex-col items-center justify-center p-5 text-muted-foreground">
-            <Car className="mb-4 size-10 opacity-40" />
-            {session.user.role === "ADMIN" ? "Nu exista vehicule in garaj." : "Nu aveti o masina alocata in garaj."}
-          </div>
-        ) : (
-          <div className={view === "compact" ? "grid gap-3" : view === "poster" ? "grid gap-5 xl:grid-cols-2" : "grid gap-5 xl:grid-cols-2"}>
-            {vehicles.map((vehicle) => {
-              const documentCosts = vehicle.documents.reduce((sum, item) => sum + Number(item.cost ?? 0), 0);
-              const expenseCosts = vehicle.expenses.reduce((sum, item) => sum + Number(item.amount), 0);
-              const total = expenseCosts + documentCosts;
-              const activeDocuments = vehicle.documents.filter((doc) => doc.validUntil >= new Date()).length;
-              const latestExpense = vehicle.expenses[0];
-              const latestOdometer = vehicle.expenses.find((expense) => expense.odometerKm)?.odometerKm;
-              const nextDocument = vehicle.documents[0];
-
-              if (view === "compact") {
-                return (
-                  <Link key={vehicle.id} href={`/vehicles/${vehicle.id}`} className="panel grid gap-3 p-4 transition hover:border-primary md:grid-cols-[1fr_auto_auto_auto] md:items-center">
-                    <div className="flex items-center gap-3">
-                      {vehicle.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={vehicle.imageUrl} alt="" className="size-10 rounded-md border border-border bg-white object-contain p-1" />
-                      ) : (
-                        <div className="flex size-10 items-center justify-center rounded-md bg-primary/15 text-primary"><Car className="size-5" /></div>
-                      )}
-                      <div>
-                        <div className="font-black">{vehicle.plateNumber}</div>
-                        <div className="text-sm text-muted-foreground">{vehicle.make} {vehicle.model}</div>
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">{formatKilometers(latestOdometer)}</div>
-                    <div className="text-sm text-muted-foreground">{nextDocument ? `${documentLabels[nextDocument.type]} · ${formatDate(nextDocument.validUntil)}` : "N/A"}</div>
-                    <div className="font-black">{formatCurrency(total)}</div>
-                  </Link>
-                );
-              }
-
-              if (view === "poster") {
-                return (
-                  <Link
-                    key={vehicle.id}
-                    href={`/vehicles/${vehicle.id}`}
-                    className="relative block min-h-64 overflow-hidden rounded-lg border border-border p-5 shadow-xl transition hover:border-primary"
-                    style={{
-                      backgroundImage: `linear-gradient(180deg, rgba(10,10,12,0.25), rgba(10,10,12,0.9)), url('${vehicle.backgroundImageUrl || "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80"}')`,
-                      backgroundPosition: "center",
-                      backgroundSize: "cover"
-                    }}
-                  >
-                    <div className="absolute bottom-5 left-5 right-5">
-                      <div className="mb-3 flex items-center gap-3">
-                        {vehicle.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={vehicle.imageUrl} alt="" className="size-12 rounded-md border border-white/20 bg-white object-contain p-1" />
-                        ) : (
-                          <div className="flex size-12 items-center justify-center rounded-md bg-black/40 text-white"><Car className="size-6" /></div>
-                        )}
-                        <div>
-                          <div className="text-2xl font-black text-white">{vehicle.plateNumber}</div>
-                          <div className="text-sm text-white/75">{vehicle.make} {vehicle.model}</div>
-                        </div>
-                      </div>
-                      <div className="grid gap-2 text-sm text-white/80 md:grid-cols-2">
-                        <span>Costuri: <strong className="text-white">{formatCurrency(total)}</strong></span>
-                        <span>Kilometraj: <strong className="text-white">{formatKilometers(latestOdometer)}</strong></span>
-                        <span>Registru: <strong className="text-white">{nextDocument ? `${documentLabels[nextDocument.type]} · ${formatDate(nextDocument.validUntil)}` : "N/A"}</strong></span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              }
-
-              return (
-                <Link key={vehicle.id} href={`/vehicles/${vehicle.id}`} className="panel block p-5 transition hover:border-primary">
-                  <div className="mb-5 flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      {vehicle.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={vehicle.imageUrl} alt="" className="size-12 rounded-md border border-border bg-white object-contain p-1" />
-                      ) : (
-                        <div className="flex size-12 items-center justify-center rounded-md bg-primary/15 text-primary">
-                          <Car className="size-6" />
-                        </div>
-                      )}
-                      <div>
-                        <div className="text-xl font-black">{vehicle.plateNumber}</div>
-                        <div className="text-sm text-muted-foreground">{vehicle.make} {vehicle.model}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-semibold uppercase text-muted-foreground">Costuri</div>
-                      <div className="text-xl font-black">{formatCurrency(total)}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 text-sm md:grid-cols-2">
-                    <DashboardMetric icon={FileCheck2} label="Registru activ" value={activeDocuments.toString()} />
-                    <DashboardMetric icon={AlertTriangle} label="Alerte in asteptare" value={vehicle.reminders.length.toString()} tone={vehicle.reminders.length > 0 ? "text-amber-300" : "text-accent"} />
-                    <DashboardMetric icon={ReceiptText} label="Ultima cheltuiala" value={latestExpense ? `${expenseLabels[latestExpense.category]} · ${formatCurrency(latestExpense.amount)}` : "N/A"} />
-                    <DashboardMetric icon={Gauge} label="Ultimul kilometraj" value={formatKilometers(latestOdometer)} />
-                  </div>
-
-                  <div className="mt-4 grid gap-2 border-t border-border pt-4 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Cheltuieli masina</span><strong>{formatCurrency(expenseCosts)}</strong></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Costuri registru</span><strong>{formatCurrency(documentCosts)}</strong></div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+        ))}
+        {ctx.isAdmin ? <Link className="car-pill" href="/vehicles/new" title="Adaugă mașină"><span className="all"><Plus className="i" /></span><span>Mașină nouă</span></Link> : null}
+        <span className="spacer" />
+        <AddCostModal vehicles={ctx.vehicles} selected={selected} categories={ctx.categories} returnTab={tab ?? "costs"} />
       </section>
 
-      <section className="mt-8">
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-black">
-          <ReceiptText className="size-4 text-accent" />
-          Activitate recenta
-        </h2>
-        <div className="panel p-4">
-          {recentExpenses.length === 0 ? (
-            <div className="flex min-h-20 items-center justify-center text-sm text-muted-foreground">Nu exista activitate recenta.</div>
-          ) : (
-            <div className="divide-y divide-border">
-              {recentExpenses.map((expense) => (
-                <div key={expense.id} className="flex items-center justify-between py-2 text-sm">
-                  <div>
-                    <div className="font-semibold">{expenseLabels[expense.category]} - {expense.vehicle.plateNumber}</div>
-                    <div className="text-xs text-muted-foreground">{formatDate(expense.occurredAt)}</div>
-                  </div>
-                  <div className="font-bold">{formatCurrency(expense.amount)}</div>
-                </div>
-              ))}
-            </div>
-          )}
+      <nav className="card tabs">
+        {TABS.map(([key, label, Icon]) => (
+          <Link key={key} className={`tab ${tab === key ? "active" : ""}`} href={href(selected, tab === key ? null : key)} scroll={false}>
+            <Icon className="i" />{label}<ChevronDown className="i chev" />
+          </Link>
+        ))}
+      </nav>
+
+      {Panel ? (
+        <div className="panel-wrap open">
+          <div>
+            <section className="card tab-panel">
+              <Panel ctx={ctx} cars={cars} selected={selected} year={params.year && /^(all|\d{4})$/.test(params.year) ? params.year : "all"} showAll={params.all === "1"} />
+            </section>
+          </div>
         </div>
-      </section>
+      ) : null}
     </AppShell>
   );
 }
 
-function ViewLink({ href, active, icon: Icon, label }: { href: string; active: boolean; icon: typeof List; label: string }) {
+function Segments({ vehicles, tab }: { vehicles: GarageVehicle[]; tab: string | null }) {
   return (
-    <Link href={href} className={`inline-flex size-9 items-center justify-center rounded font-semibold transition ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`} title={label} aria-label={label}>
-      <Icon className="size-4" />
-    </Link>
+    <div className="segments">
+      {vehicles.map((v) => (
+        <Link key={v.id} className="seg" href={`/?car=${v.id}${tab ? `&tab=${tab}` : ""}`} scroll={false} title={`${v.make} ${v.model}`}>
+          <div className="seg-bg" style={v.backgroundImageUrl ? { backgroundImage: `url("${v.backgroundImageUrl}")` } : undefined} />
+          {v.driver ? <div className="seg-driver"><Avatar name={v.driver} imageUrl={v.driver.profileImageUrl} /><span>{v.driver.firstName}</span></div> : null}
+          <div className="seg-info"><Plate plateNumber={v.plateNumber} electric={v.fuelType === "ELECTRIC"} big /></div>
+        </Link>
+      ))}
+    </div>
   );
 }
 
-function DashboardMetric({
-  icon: Icon,
-  label,
-  value,
-  tone = "text-foreground"
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  tone?: string;
-}) {
+function SingleHero({ vehicle: v, ctx }: { vehicle: GarageVehicle; ctx: GarageContext }) {
+  const next = latestDocuments(v).find((d) => d.validUntil.getTime() > Date.now() - 365 * 86_400_000);
+  const status = next ? docStatus(next.validUntil, ctx.settings.highPriorityDays) : null;
   return (
-    <div className="rounded-md border border-border bg-muted/30 p-3">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
-        <Icon className="size-4" />
-        {label}
+    <>
+      <div className="hero-bg" style={v.backgroundImageUrl ? { backgroundImage: `url("${v.backgroundImageUrl}")` } : undefined} />
+      <div className="hero-shade" />
+      {v.driver ? (
+        <div className="hero-badge driver">
+          <Avatar name={v.driver} imageUrl={v.driver.profileImageUrl} />
+          <div><b>{v.driver.firstName} {v.driver.lastName}</b><small>{v.driver.role === "ADMIN" ? "Administrator" : "Șofer"}{v.driver.licenseCategory ? ` · ${v.driver.licenseCategory}` : ""}</small></div>
+        </div>
+      ) : null}
+      <div className="hero-content">
+        <div>
+          <div className="car-title">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {v.imageUrl ? <div className="logo-chip"><img src={v.imageUrl} alt="" /></div> : null}
+            <div><h1>{v.make} {v.model}</h1><Plate plateNumber={v.plateNumber} electric={v.fuelType === "ELECTRIC"} /></div>
+          </div>
+          <div className="chips">
+            {v.manufacturingYear ? <span className="chip">{v.manufacturingYear}</span> : null}
+            {v.fuelType ? <span className="chip">{fuelLabels[v.fuelType]}</span> : null}
+            {v.powerKw ? <span className="chip">{v.powerKw} kW · {horsePower(v.powerKw)} CP</span> : null}
+            {currentKm(v) ? <span className="chip">{km(currentKm(v))}</span> : null}
+          </div>
+        </div>
+        {next && status ? (
+          <div className="next-card">
+            <small>Următorul termen</small>
+            <strong>{documentLabel[next.type]}</strong>
+            <div className="when">{fmtDate(next.validUntil, ctx.settings.dateFormat)} · {status.cls === "ok" ? `peste ${status.days} zile` : status.text.toLowerCase()}</div>
+          </div>
+        ) : null}
       </div>
-      <div className={`font-bold ${tone}`}>{value}</div>
+    </>
+  );
+}
+
+function Activity({ ctx, cars, all }: { ctx: GarageContext; cars: GarageVehicle[]; all: boolean }) {
+  const now = new Date();
+  const entries = costEntries(cars, ctx.categories).filter((e) => e.date <= now).slice(0, 8);
+  return (
+    <div className="card activity">
+      <h3>Activitate recentă</h3>
+      {entries.length ? entries.map((e) => (
+        <div className="act-row" key={`${e.kind}-${e.id}`}>
+          <CatBadge categoryKey={e.categoryKey} categories={ctx.categories} />
+          <div className="t"><div>{e.title}</div><small>{fmtDate(e.date, ctx.settings.dateFormat)}{all ? ` · ${e.vehicle.plateNumber}` : ""}</small></div>
+          <span className="a">{money(e.amount)}</span>
+        </div>
+      )) : <div className="hint">Nicio activitate încă.</div>}
     </div>
   );
 }

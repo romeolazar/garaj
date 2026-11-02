@@ -1,56 +1,18 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { loadGarage } from "@/lib/garage-data";
+import { backupPayload } from "@/lib/exports";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return new NextResponse("Unauthorized", { status: 401 });
+  const { isAdmin, categories } = await loadGarage();
+  if (!isAdmin) return new NextResponse("Forbidden", { status: 403 });
 
-  const vehicles = await prisma.vehicle.findMany({
-    include: {
-      documents: true,
-      reminders: true,
-      expenses: true,
-      services: true,
-      tires: true,
-      driver: {
-        select: {
-          email: true,
-          firstName: true,
-          lastName: true,
-          profileImageUrl: true,
-          role: true,
-          licenseCategory: true,
-          licenseIssuedAt: true,
-          licenseExpiresAt: true,
-          idCardIssuedAt: true,
-          idCardExpiresAt: true
-        }
-      }
+  const payload = await backupPayload(categories);
+  return new NextResponse(JSON.stringify(payload, null, 2), {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "content-disposition": `attachment; filename="garaj-backup-${payload.exportedAt.slice(0, 10)}.json"`
     }
-  });
-
-  const users = await prisma.user.findMany({
-    select: {
-      email: true,
-      firstName: true,
-      lastName: true,
-      profileImageUrl: true,
-      role: true,
-      licenseCategory: true,
-      licenseIssuedAt: true,
-      licenseExpiresAt: true,
-      idCardIssuedAt: true,
-      idCardExpiresAt: true
-    }
-  });
-
-  return NextResponse.json({
-    exportedAt: new Date().toISOString(),
-    vehicles,
-    users
   });
 }

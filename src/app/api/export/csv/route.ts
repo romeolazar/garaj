@@ -1,38 +1,20 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { costEntries } from "@/lib/garage";
+import { loadGarage } from "@/lib/garage-data";
+import { costsCsv } from "@/lib/exports";
 
 export const dynamic = "force-dynamic";
 
-function escapeCsv(value: unknown) {
-  const text = String(value ?? "");
-  return `"${text.replaceAll('"', '""')}"`;
-}
+// Costs of the signed-in user's cars; ?year=2026 limits to one year.
+export async function GET(request: Request) {
+  const { vehicles, categories } = await loadGarage();
+  const year = new URL(request.url).searchParams.get("year");
+  const entries = costEntries(vehicles, categories).filter((e) => !year || String(e.date.getFullYear()) === year);
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return new NextResponse("Unauthorized", { status: 401 });
-
-  const vehicles = await prisma.vehicle.findMany({ include: { expenses: true, documents: true } });
-  const rows = [
-    ["plateNumber", "make", "model", "vin", "documents", "totalExpenses"].map(escapeCsv).join(","),
-    ...vehicles.map((vehicle) =>
-      [
-        vehicle.plateNumber,
-        vehicle.make,
-        vehicle.model,
-        vehicle.vin,
-        vehicle.documents.length,
-        vehicle.expenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
-      ].map(escapeCsv).join(",")
-    )
-  ];
-
-  return new NextResponse(rows.join("\n"), {
+  return new NextResponse(costsCsv(entries, categories), {
     headers: {
       "content-type": "text/csv; charset=utf-8",
-      "content-disposition": "attachment; filename=garaj-export.csv"
+      "content-disposition": `attachment; filename=garaj-costuri${year ? `-${year}` : ""}.csv`
     }
   });
 }

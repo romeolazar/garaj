@@ -67,6 +67,17 @@ export default async function NewVehiclePage() {
         </section>
 
         <section className="panel p-5">
+          <h2 className="mb-5 text-xl font-black">Dotări, baterie și mementouri</h2>
+          <label className="block"><span className="label">Dotări (una pe rând)</span><textarea className="field min-h-28" name="equipment"  placeholder={"Autopilot\nJante 18\"\nPachet iarnă"} /></label>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label><span className="label">Capacitate baterie kWh</span><input className="field" name="batteryCapacityKwh" inputMode="decimal"  placeholder="doar electrice" /></label>
+            <label><span className="label">Garanție baterie până la</span><input className="field" name="batteryWarrantyUntil" type="date"  /></label>
+            <label><span className="label">Garanție baterie km</span><input className="field" name="batteryWarrantyKm" type="number"  /></label>
+          </div>
+          <label className="mt-4 flex items-center gap-3"><input type="checkbox" className="switch" name="remindersEnabled" defaultChecked /><span>Mementouri active pentru această mașină</span></label>
+        </section>
+
+        <section className="panel p-5">
           <h2 className="mb-5 text-xl font-black">Registru initial</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <DocumentDateCost dateName="itpUntil" costName="itpCost" label="ITP" />

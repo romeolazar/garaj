@@ -6,16 +6,18 @@ Rulează într-un singur container Docker, cu o bază de date SQLite inclusă. N
 
 ## Funcționalități
 
-- **Panou principal** cu mașinile, costurile, documentele care expiră și activitatea recentă.
-- **Registru de documente**: ITP, RCA, CASCO, rovinietă, extinctor, trusă medicală, garanție.
-- **Cheltuieli** pe mașină, cu categorie, kilometraj și note.
-- **Rate recurente** pentru credit auto, leasing, CASCO, RCA sau alte obligații, cu evidența plăților.
-- **Revizii și anvelope** pentru fiecare mașină.
-- **Alerte** pentru documentele care expiră, cu notificări pe Telegram și pe email (Gmail).
-- **Rapoarte** de costuri pe baza datelor introduse.
-- **Utilizatori** cu două roluri: administratorul vede tot, iar șoferul vede doar mașina alocată lui.
-- **Profil șofer** cu datele permisului și ale cărții de identitate, plus mementouri de expirare.
-- **Export și import JSON** pentru backup, plus export CSV.
+- **Panou** cu toate mașinile sau cu mașina selectată: șoferul cu poză, următorul termen, activitatea recentă și rubrici care se deschid sub bară.
+- **Date generale și dotări**: specificații, echipament de fabrică, accesorii adăugate, echipament obligatoriu.
+- **Registru**: ITP, RCA, CASCO, rovinietă, extinctor, trusă medicală, garanție, cu istoric și mementouri automate.
+- **Costuri** pe categorii configurabile (culoare și iconiță), plus **rate recurente** pentru credit, leasing sau asigurări în rate.
+- **Statistici**: cost total de deținere, cost pe km, grafic pe 12 luni, evoluția kilometrajului.
+- **Combustibil**: alimentări și încărcări cu cantitate, preț, procent baterie și consum; **import din CSV / Excel** (exportul „Charges” din My Renault e recunoscut automat), fără dubluri la reimport.
+- **Anvelope** și **baterie** (capacitate, garanție, bateria de 12V din revizii).
+- **Alerte** în listă sau calendar, inclusiv pentru permisele și buletinele șoferilor și pentru revizia după kilometraj.
+- **Rapoarte** pe an, pe mașini și categorii, cu export CSV.
+- **Șoferi** cu carduri în stilul permisului; fiecare șofer are cont în aplicație și vede doar mașina alocată.
+- **Notificări pe Telegram**, la ora aleasă.
+- **Backup** într-o arhivă .zip (JSON pentru restaurare + CSV pentru Excel) și import din .zip sau din backup-urile mai vechi .grj / .json.
 
 ## Pornire rapidă
 
@@ -72,18 +74,13 @@ Toate datele (baza de date și cheia de sesiune) stau în volumul montat la `/ap
 
 ### Notificări
 
-Notificările se configurează din aplicație, în **Setări**.
+Notificările se configurează din **Setări → Notificări Telegram**.
 
-**Telegram**
 1. Creează un bot cu [@BotFather](https://t.me/BotFather) și copiază tokenul.
-2. Află chat ID-ul conversației în care vrei să primești mesajele.
-3. Completează `Telegram bot token` și `Telegram chat ID`, apoi apasă butonul de test.
+2. Trimite un mesaj botului și află chat ID-ul (de exemplu cu @userinfobot).
+3. Completează tokenul și chat ID-ul, apoi apasă „Trimite mesaj de test”.
 
-**Email (Gmail)**
-1. Activează verificarea în doi pași pe contul Google și creează o [App Password](https://myaccount.google.com/apppasswords).
-2. Completează adresa Gmail și App Password, apoi apasă butonul de test.
-
-Emailurile pleacă spre șoferul mașinii și spre utilizatorul care a adăugat-o.
+Ora notificărilor și pragurile de prioritate se setează din **Setări → Mementouri**; mementourile se pot opri pentru o anumită mașină din rubrica ei **Setări**.
 
 ## Actualizare
 
@@ -96,7 +93,7 @@ Modificările de structură ale bazei de date se aplică automat la pornire. Pen
 
 ## Backup și restaurare
 
-**Din aplicație:** în **Setări** poți exporta toate datele într-un fișier JSON și le poți importa înapoi. Parolele utilizatorilor și setările de notificare nu sunt incluse în export.
+**Din aplicație:** în **Setări → Backup & export** descarci o arhivă `.zip` cu toate datele (`garaj.json` pentru restaurare, `costuri.csv` și `documente.csv` pentru Excel) și o poți importa înapoi. Parolele utilizatorilor și tokenul Telegram nu sunt incluse. Conturile create la import primesc o parolă aleatorie, pe care administratorul o schimbă din **Șoferi → Editează**.
 
 **Copie completă a bazei de date:**
 
