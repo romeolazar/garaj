@@ -1,18 +1,23 @@
 # Garaj
 
-Garaj este o aplicatie web pentru administrarea masinilor personale: registru documente, cheltuieli, rate recurente, soferi, notificari si rapoarte.
+Aplicație web self-hosted pentru administrarea mașinilor personale sau a unei flote mici: documente cu termen de valabilitate, cheltuieli, rate, revizii, anvelope, șoferi și notificări înainte de expirare.
 
-Aplicatia este publicata si ca imagine Docker:
+Rulează într-un singur container Docker, cu o bază de date SQLite inclusă. Nu ai nevoie de un server de baze de date separat.
 
-```bash
-docker pull romeolazar/garaj:latest
-```
+## Funcționalități
 
-## Deploy Cu Docker
+- **Panou principal** cu mașinile, costurile, documentele care expiră și activitatea recentă.
+- **Registru de documente**: ITP, RCA, CASCO, rovinietă, extinctor, trusă medicală, garanție.
+- **Cheltuieli** pe mașină, cu categorie, kilometraj și note.
+- **Rate recurente** pentru credit auto, leasing, CASCO, RCA sau alte obligații, cu evidența plăților.
+- **Revizii și anvelope** pentru fiecare mașină.
+- **Alerte** pentru documentele care expiră, cu notificări pe Telegram și pe email (Gmail).
+- **Rapoarte** de costuri pe baza datelor introduse.
+- **Utilizatori** cu două roluri: administratorul vede tot, iar șoferul vede doar mașina alocată lui.
+- **Profil șofer** cu datele permisului și ale cărții de identitate, plus mementouri de expirare.
+- **Export și import JSON** pentru backup, plus export CSV.
 
-Aplicatia ruleaza intr-un singur container: serverul web, mementourile (Telegram/email) si baza de date SQLite. Toate datele stau in volumul montat la `/app/data`.
-
-Varianta cea mai simpla:
+## Pornire rapidă
 
 ```bash
 docker run -d --name garaj --restart unless-stopped \
@@ -21,7 +26,11 @@ docker run -d --name garaj --restart unless-stopped \
   romeolazar/garaj:latest
 ```
 
-Sau cu Docker Compose, intr-un fisier `compose.yaml`:
+Deschide `http://localhost:5001`. La prima pornire ești redirecționat la `/setup`, unde creezi contul de administrator.
+
+## Docker Compose
+
+Creează un fișier `compose.yaml`:
 
 ```yaml
 name: garaj
@@ -42,35 +51,54 @@ volumes:
   garaj_data:
 ```
 
+Apoi pornește aplicația:
+
 ```bash
 docker compose up -d
 ```
 
-Deschide `http://localhost:5001`. La prima accesare, aplicatia te trimite la `/setup`, unde creezi contul initial de administrator.
+## Configurare
 
-Variabile optionale:
+Toate variabilele sunt opționale.
 
-| Variabila | Implicit | Rol |
+| Variabilă | Implicit | Descriere |
 | --- | --- | --- |
-| `NEXTAUTH_URL` | `http://localhost:5001` | URL-ul public al aplicatiei; seteaza-l cand o expui in retea/internet. |
-| `NEXTAUTH_SECRET` | generat automat | Daca lipseste, se genereaza o data si se salveaza in `/app/data/.nextauth_secret`. |
-| `REMINDER_POLL_SECONDS` | `300` | Cat de des se verifica mementourile. |
-| `TZ` | `Europe/Bucharest` | Fusul orar pentru ora notificarilor. |
+| `NEXTAUTH_URL` | `http://localhost:5001` | Adresa la care accesezi aplicația. Trebuie să fie exact URL-ul din browser, inclusiv `https://` dacă folosești un reverse proxy. |
+| `NEXTAUTH_SECRET` | generat automat | Cheia pentru sesiunile de login. Dacă lipsește, se generează la prima pornire și se salvează în `/app/data/.nextauth_secret`. |
+| `REMINDER_POLL_SECONDS` | `300` | La câte secunde se verifică dacă sunt notificări de trimis. |
+| `TZ` | `Europe/Bucharest` | Fusul orar folosit pentru date și notificări. |
 
-## Update
+Toate datele (baza de date și cheia de sesiune) stau în volumul montat la `/app/data`. Imaginea Docker nu conține date.
+
+### Notificări
+
+Notificările se configurează din aplicație, în **Setări**.
+
+**Telegram**
+1. Creează un bot cu [@BotFather](https://t.me/BotFather) și copiază tokenul.
+2. Află chat ID-ul conversației în care vrei să primești mesajele.
+3. Completează `Telegram bot token` și `Telegram chat ID`, apoi apasă butonul de test.
+
+**Email (Gmail)**
+1. Activează verificarea în doi pași pe contul Google și creează o [App Password](https://myaccount.google.com/apppasswords).
+2. Completează adresa Gmail și App Password, apoi apasă butonul de test.
+
+Emailurile pleacă spre șoferul mașinii și spre utilizatorul care a adăugat-o.
+
+## Actualizare
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-Migrarile bazei de date se aplica automat la pornire.
+Modificările de structură ale bazei de date se aplică automat la pornire. Pentru producție e recomandat să fixezi o versiune concretă în loc de `latest` (de exemplu `romeolazar/garaj:5634572`). Tagurile disponibile sunt pe [Docker Hub](https://hub.docker.com/r/romeolazar/garaj/tags).
 
-## Backup
+## Backup și restaurare
 
-Exportul datelor se poate face din aplicatie, in `Setari -> Export / Import`. Parolele utilizatorilor si secretele de notificare nu sunt incluse.
+**Din aplicație:** în **Setări** poți exporta toate datele într-un fișier JSON și le poți importa înapoi. Parolele utilizatorilor și setările de notificare nu sunt incluse în export.
 
-Pentru o copie completa, copiaza baza SQLite din container:
+**Copie completă a bazei de date:**
 
 ```bash
 docker compose stop garaj
@@ -78,61 +106,37 @@ docker compose cp garaj:/app/data/garaj.db ./garaj-backup.db
 docker compose start garaj
 ```
 
-Pentru restaurare, opreste containerul, copiaza fisierul inapoi la `/app/data/garaj.db` si reporneste.
+**Restaurare:**
 
-## Migrare De La Versiunea Cu PostgreSQL
+```bash
+docker compose stop garaj
+docker compose cp ./garaj-backup.db garaj:/app/data/garaj.db
+docker compose start garaj
+```
 
-Versiunile anterioare foloseau 3 containere (aplicatie, worker, PostgreSQL). Pentru a trece pe varianta cu un singur container:
+## Securitate
 
-1. In versiunea veche, exporta datele din `Setari -> Export / Import` si noteaza setarile de notificare (Telegram, Gmail).
-2. Opreste stack-ul vechi: `docker compose down` (volumul PostgreSQL ramane pe disc).
-3. Porneste noua versiune, creeaza administratorul in `/setup`, apoi importa fisierul exportat din `Setari`.
-4. Reseteaza parolele soferilor din `Utilizatori` si completeaza din nou setarile de notificare.
-5. Dupa ce ai verificat datele, poti sterge volumul vechi: `docker volume rm garaj_postgres_data_v2`.
+- Dacă expui aplicația pe internet, pune-o în spatele unui reverse proxy cu HTTPS (Caddy, Nginx, Traefik) și setează `NEXTAUTH_URL` la adresa publică.
+- Dacă setezi manual `NEXTAUTH_SECRET`, folosește o valoare lungă și aleatoare: `openssl rand -base64 32`.
+- Fă backup regulat la volumul `/app/data`.
 
-## Rulare Locala Pentru Dezvoltare
+## Dezvoltare
 
-Aplicatia nu include parole, token-uri sau date reale in repository.
+Ai nevoie de Node.js 22.
 
-1. Copiaza `.env.example` in `.env`.
-2. `npm install && npx prisma migrate deploy`
-3. `npm run dev`
+```bash
+cp .env.example .env
+npm install
+npx prisma migrate deploy
+npm run dev
+```
 
-Sau construieste imaginea local: `docker compose up -d --build`.
+Aplicația pornește pe `http://localhost:3000`. Pentru a testa imaginea Docker local:
 
-Seed-ul demo este optional. Ruleaza `npm run prisma:seed` doar daca ai setat explicit `SEED_ADMIN_PASSWORD` in mediul local.
+```bash
+docker compose up -d --build
+```
 
-## Functionalitati
+Date demo (opțional): setează `SEED_ADMIN_PASSWORD` (și, opțional, `SEED_ADMIN_EMAIL`) în `.env`, apoi rulează `npm run prisma:seed`.
 
-- Panou principal cu masini, costuri, registru si activitate recenta.
-- Registru pentru ITP, RCA, CASCO, rovinieta, extinctor si trusa medicala.
-- Cheltuieli pe masina, inclusiv kilometraj si note.
-- Rate recurente pentru credit auto, CASCO, RCA, leasing sau alte obligatii.
-- Soferi cu roluri: administrator si sofer.
-- Acces limitat pentru sofer la masina alocata.
-- Profil sofer cu permis si memento CI.
-- Notificari Telegram si email prin Gmail SMTP.
-- Export si import JSON.
-- Rapoarte pe baza datelor introduse.
-
-## Configurare Notificari
-
-Telegram:
-
-- seteaza `Telegram bot token`
-- seteaza `Telegram chat ID`
-- foloseste butonul de test din Setari
-
-Email:
-
-- aplicatia foloseste Gmail SMTP
-- seteaza utilizatorul Gmail
-- seteaza o App Password Gmail
-- foloseste butonul de test din Setari
-
-## Note De Securitate
-
-- Nu publica fisierul `.env`.
-- Daca setezi manual `NEXTAUTH_SECRET`, foloseste o valoare lunga si random (`openssl rand -base64 32`).
-- Pentru deploy public, seteaza `NEXTAUTH_URL` la URL-ul real al aplicatiei.
-- Datele reale introduse in aplicatie raman in volumul `/app/data`, nu in imaginea Docker.
+**Tehnologii:** Next.js 15, React 19, Prisma, SQLite, NextAuth, Tailwind CSS.
