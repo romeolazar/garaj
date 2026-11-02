@@ -8,128 +8,97 @@ Aplicatia este publicata si ca imagine Docker:
 docker pull romeolazar/garaj:latest
 ```
 
-## Deploy Cu Docker Compose
+## Deploy Cu Docker
 
-Ai nevoie de Docker si Docker Compose.
+Aplicatia ruleaza intr-un singur container: serverul web, mementourile (Telegram/email) si baza de date SQLite. Toate datele stau in volumul montat la `/app/data`.
 
-1. Creeaza un folder pentru deploy:
-
-```bash
-mkdir garaj
-cd garaj
-```
-
-2. Creeaza fisierul `.env`:
-
-```env
-POSTGRES_USER=garaj
-POSTGRES_PASSWORD=schimba-cu-o-parola-puternica
-POSTGRES_DB=garaj
-NEXTAUTH_URL=http://localhost:5001
-NEXTAUTH_SECRET=schimba-cu-un-secret-lung-random
-```
-
-Pentru `NEXTAUTH_SECRET`, foloseste o valoare lunga si random, de exemplu generata cu:
+Varianta cea mai simpla:
 
 ```bash
-openssl rand -base64 32
+docker run -d --name garaj --restart unless-stopped \
+  -p 5001:5001 \
+  -v garaj_data:/app/data \
+  romeolazar/garaj:latest
 ```
 
-3. Creeaza fisierul `compose.yaml`:
+Sau cu Docker Compose, intr-un fisier `compose.yaml`:
 
 ```yaml
 name: garaj
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: garaj-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-garaj}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-garaj}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-garaj} -d ${POSTGRES_DB:-garaj}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  app:
+  garaj:
     image: romeolazar/garaj:latest
     container_name: garaj
     restart: unless-stopped
-    command: ["sh", "-c", "npx prisma db push && npm run start -- -p 5001"]
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-garaj}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-garaj}?schema=public
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5001}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
-      UPLOAD_DIR: /app/uploads
+      NEXTAUTH_URL: http://localhost:5001
     ports:
       - "5001:5001"
     volumes:
-      - uploads_data:/app/uploads
+      - garaj_data:/app/data
 
 volumes:
-  postgres_data:
-  uploads_data:
+  garaj_data:
 ```
-
-4. Porneste aplicatia:
 
 ```bash
 docker compose up -d
 ```
 
-5. Deschide aplicatia:
+Deschide `http://localhost:5001`. La prima accesare, aplicatia te trimite la `/setup`, unde creezi contul initial de administrator.
 
-```text
-http://localhost:5001
-```
+Variabile optionale:
 
-La prima accesare, aplicatia te trimite la `/setup`, unde creezi contul initial de administrator.
+| Variabila | Implicit | Rol |
+| --- | --- | --- |
+| `NEXTAUTH_URL` | `http://localhost:5001` | URL-ul public al aplicatiei; seteaza-l cand o expui in retea/internet. |
+| `NEXTAUTH_SECRET` | generat automat | Daca lipseste, se genereaza o data si se salveaza in `/app/data/.nextauth_secret`. |
+| `REMINDER_POLL_SECONDS` | `300` | Cat de des se verifica mementourile. |
+| `TZ` | `Europe/Bucharest` | Fusul orar pentru ora notificarilor. |
 
 ## Update
 
-Pentru actualizarea aplicatiei la ultima imagine publicata:
-
 ```bash
-docker compose pull app
+docker compose pull
 docker compose up -d
 ```
 
+Migrarile bazei de date se aplica automat la pornire.
+
 ## Backup
 
-Exportul datelor se poate face din aplicatie, in `Setari -> Export / Import`.
+Exportul datelor se poate face din aplicatie, in `Setari -> Export / Import`. Parolele utilizatorilor si secretele de notificare nu sunt incluse.
 
-Pentru backup complet al bazei PostgreSQL:
-
-```bash
-docker compose exec postgres pg_dump -U garaj garaj > garaj-backup.sql
-```
-
-Pentru restaurare:
+Pentru o copie completa, copiaza baza SQLite din container:
 
 ```bash
-docker compose exec -T postgres psql -U garaj garaj < garaj-backup.sql
+docker compose stop garaj
+docker compose cp garaj:/app/data/garaj.db ./garaj-backup.db
+docker compose start garaj
 ```
+
+Pentru restaurare, opreste containerul, copiaza fisierul inapoi la `/app/data/garaj.db` si reporneste.
+
+## Migrare De La Versiunea Cu PostgreSQL
+
+Versiunile anterioare foloseau 3 containere (aplicatie, worker, PostgreSQL). Pentru a trece pe varianta cu un singur container:
+
+1. In versiunea veche, exporta datele din `Setari -> Export / Import` si noteaza setarile de notificare (Telegram, Gmail).
+2. Opreste stack-ul vechi: `docker compose down` (volumul PostgreSQL ramane pe disc).
+3. Porneste noua versiune, creeaza administratorul in `/setup`, apoi importa fisierul exportat din `Setari`.
+4. Reseteaza parolele soferilor din `Utilizatori` si completeaza din nou setarile de notificare.
+5. Dupa ce ai verificat datele, poti sterge volumul vechi: `docker volume rm garaj_postgres_data_v2`.
 
 ## Rulare Locala Pentru Dezvoltare
 
 Aplicatia nu include parole, token-uri sau date reale in repository.
 
 1. Copiaza `.env.example` in `.env`.
-2. Inlocuieste valorile placeholder pentru `POSTGRES_PASSWORD` si `NEXTAUTH_SECRET`.
-3. Porneste stack-ul local:
+2. `npm install && npx prisma migrate deploy`
+3. `npm run dev`
 
-```bash
-docker compose up -d --build
-```
+Sau construieste imaginea local: `docker compose up -d --build`.
 
 Seed-ul demo este optional. Ruleaza `npm run prisma:seed` doar daca ai setat explicit `SEED_ADMIN_PASSWORD` in mediul local.
 
@@ -164,6 +133,6 @@ Email:
 ## Note De Securitate
 
 - Nu publica fisierul `.env`.
-- Schimba mereu `POSTGRES_PASSWORD` si `NEXTAUTH_SECRET` in productie.
+- Daca setezi manual `NEXTAUTH_SECRET`, foloseste o valoare lunga si random (`openssl rand -base64 32`).
 - Pentru deploy public, seteaza `NEXTAUTH_URL` la URL-ul real al aplicatiei.
-- Datele reale introduse in aplicatie raman in volumul PostgreSQL, nu in imaginea Docker.
+- Datele reale introduse in aplicatie raman in volumul `/app/data`, nu in imaginea Docker.

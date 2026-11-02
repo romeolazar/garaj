@@ -1,0 +1,21 @@
+name: garaj
+
+services:
+  garaj:
+    image: ${GARAJ_IMAGE:-garaj:local}
+    build: .
+    container_name: garaj
+    restart: unless-stopped
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5001}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
+      REMINDER_POLL_SECONDS: ${REMINDER_POLL_SECONDS:-300}
+      TZ: ${TZ:-Europe/Bucharest}
+    ports:
+      - "5001:5001"
+    volumes:
+      - garaj_data:/app/data
+
+volumes:
+  garaj_data:
+    name: garaj_data

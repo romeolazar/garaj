@@ -15,3 +15,7 @@ garaj-export*.csv
 *export*.json
 *export*.csv
 bettershot_*.png
+/data
+*.db
+*.db-journal
+*.grj

@@ -1,6 +1,7 @@
 import { PrismaClient, DocumentType, FuelType, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { addDays, addMonths } from "date-fns";
+import { reminderDaysValue } from "../src/lib/reminders";
 
 const prisma = new PrismaClient();
 
@@ -69,7 +70,7 @@ async function main() {
       ? await prisma.vehicleDocument.update({ where: { id: existing.id }, data: { validUntil } })
       : await prisma.vehicleDocument.create({ data: { vehicleId: vehicle.id, type, validUntil, reminderDays: [30, 7, 3, 1] } });
 
-    for (const days of document.reminderDays) {
+    for (const days of reminderDaysValue(document.reminderDays)) {
       await prisma.reminder.upsert({
         where: { id: `${document.id}-${days}` },
         update: {},
@@ -85,7 +86,8 @@ async function main() {
     }
   }
 
-  await prisma.expense.createMany({
+  const hasExpenses = (await prisma.expense.count({ where: { vehicleId: vehicle.id } })) > 0;
+  if (!hasExpenses) await prisma.expense.createMany({
     data: [
       {
         vehicleId: vehicle.id,
@@ -103,8 +105,7 @@ async function main() {
         odometerKm: 12850,
         notes: "Exemplu alimentare"
       }
-    ],
-    skipDuplicates: true
+    ]
   });
 
 }

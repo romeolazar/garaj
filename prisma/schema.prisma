@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -123,7 +123,7 @@ model Vehicle {
   seats                 Int?
   manufacturingYear     Int?
   warrantyUntil         DateTime?
-  acquisitionPrice      Decimal?  @db.Decimal(12, 2)
+  acquisitionPrice      Decimal?
   notes                 String?
   imageUrl              String?
   backgroundImageUrl    String?
@@ -150,8 +150,8 @@ model VehicleDocument {
   validityMonths Int?
   paymentFrequency PaymentFrequency?
   validUntil     DateTime
-  cost           Decimal?     @db.Decimal(12, 2)
-  reminderDays   Int[]        @default([30, 7, 3, 1])
+  cost           Decimal?
+  reminderDays   Json         @default("[30,7,3,1]")
   notes          String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -181,7 +181,7 @@ model Expense {
   id          String          @id @default(cuid())
   vehicleId   String
   category    ExpenseCategory
-  amount      Decimal         @db.Decimal(12, 2)
+  amount      Decimal
   occurredAt  DateTime
   odometerKm  Int?
   notes       String?
@@ -195,8 +195,8 @@ model PaymentPlan {
   vehicleId          String
   name               String
   category           PaymentPlanCategory
-  totalAmount        Decimal           @db.Decimal(12, 2)
-  installmentAmount  Decimal           @db.Decimal(12, 2)
+  totalAmount        Decimal
+  installmentAmount  Decimal
   totalInstallments  Int
   frequency          PaymentFrequency
   firstPaymentDate   DateTime
@@ -218,7 +218,7 @@ model PaymentInstallment {
   paymentPlanId      String
   installmentNumber  Int
   dueDate            DateTime
-  amount             Decimal                  @db.Decimal(12, 2)
+  amount             Decimal
   currency           String                   @default("RON")
   status             PaymentInstallmentStatus @default(UNPAID)
   paidDate           DateTime?
@@ -237,7 +237,7 @@ model ServiceRecord {
   vehicleId   String
   servicedAt  DateTime
   odometerKm  Int?
-  cost        Decimal   @db.Decimal(12, 2)
+  cost        Decimal
   notes       String?
   createdAt   DateTime  @default(now())
 
@@ -251,7 +251,7 @@ model TireSet {
   brand       String
   model       String?
   size        String
-  cost        Decimal?  @db.Decimal(12, 2)
+  cost        Decimal?
   purchasedAt DateTime
   notes       String?
   createdAt   DateTime  @default(now())
