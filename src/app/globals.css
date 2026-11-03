@@ -390,8 +390,8 @@ code { font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--
 .seg-driver { position: absolute; top: 18px; left: 50px; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: rgba(var(--shade), .6); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(8px); font-size: 13px; font-weight: 700; }
 .seg:first-child .seg-driver { left: 18px; }
 .seg-driver .av { width: 30px; height: 30px; font-size: 11px; }
-.eu-photo.av { width: 27%; height: auto; aspect-ratio: 3 / 4; border-radius: 8px; background: linear-gradient(160deg, #ffffff 0%, #ece7f7 100%); color: #5b4bf5; font-size: 22px; border: 1px solid rgba(0,0,0,.08); }
-.eu-photo.av img { filter: grayscale(1) contrast(1.05); }
+.eu-photo.av { width: 23%; height: auto; aspect-ratio: 5 / 6; align-self: flex-start; border-radius: 8px; background: linear-gradient(160deg, #ffffff 0%, #ece7f7 100%); color: #5b4bf5; font-size: 22px; border: 1px solid rgba(0,0,0,.08); }
+.eu-photo.av img { filter: grayscale(1) contrast(1.05); object-position: center 30%; }
 
 
 
