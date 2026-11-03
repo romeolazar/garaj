@@ -703,9 +703,11 @@ export async function deleteVehicle(vehicleId: string) {
   const session = await requireSession();
   if (session.user.role !== "ADMIN") redirect(`/?car=${vehicleId}&tab=general`);
 
+  // Rows cascade with the car; its uploaded files are removed from disk here.
+  for (const file of await prisma.fileAttachment.findMany({ where: { vehicleId } })) await removeStoredFile(file.path);
   await prisma.vehicle.delete({ where: { id: vehicleId } });
   revalidatePath("/");
-    redirect("/");
+  redirect("/?deleted=1");
 }
 
 export async function importJsonData(formData: FormData) {

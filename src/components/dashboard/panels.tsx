@@ -84,7 +84,7 @@ function Equipment({ vehicle, ctx }: { vehicle: GarageVehicle; ctx: GarageContex
   return (
     <div className="grid3">
       <div className="box">
-        <h3>Echipament de fabrică{vehicle.equipment ? null : <span className="count">din note</span>}</h3>
+        <h3>Echipament de fabrică{!vehicle.equipment && factory.length ? <span className="count">din note</span> : null}</h3>
         {factory.length ? factory.map((line, i) => <div className="row" key={i}><span className="dot" style={{ background: "var(--accent)" }} /><div className="grow">{line}</div></div>) : <div className="hint">Completează dotările din Setări → Editează mașina.</div>}
       </div>
       <div className="box">
@@ -156,6 +156,7 @@ export function GeneralPanel(props: PanelProps) {
     <>
       <Head title="Date generale" sub={scope(props)}>
         <Link className="btn-secondary btn-sm" href={`/vehicles/${v.id}/edit`}><Pencil className="i" />Editează</Link>
+        {ctx.isAdmin ? <DeleteCarButton vehicle={v} /> : null}
       </Head>
       <div className="box">
         <h3><Car className="i" />Identificare și specificații</h3>
@@ -558,8 +559,8 @@ export function CarSettingsPanel(props: PanelProps) {
               <Link className="ios-row" href={`/?car=${v.id}&tab=registry`}><div className="grow">Documente</div><FileText className="i chev-r" /></Link>
               {ctx.isAdmin ? (
                 <div className="ios-row">
-                  <div className="grow" style={{ color: "var(--danger)" }}>Șterge mașina<small>Se șterg și documentele, costurile și istoricul</small></div>
-                  <ConfirmForm action={deleteVehicle.bind(null, v.id)} message={`Ștergi mașina ${v.plateNumber}? Acțiunea nu poate fi anulată.`} className="icon-sm" title="Șterge mașina"><Trash2 className="i" style={{ width: 14, height: 14, color: "var(--danger)" }} /></ConfirmForm>
+                  <div className="grow">Șterge mașina<small>Se șterg și documentele, costurile, fișierele și istoricul</small></div>
+                  <DeleteCarButton vehicle={v} />
                 </div>
               ) : null}
             </div>
@@ -567,6 +568,19 @@ export function CarSettingsPanel(props: PanelProps) {
         ))}
       </div>
     </>
+  );
+}
+
+export function DeleteCarButton({ vehicle }: { vehicle: GarageVehicle }) {
+  return (
+    <ConfirmForm
+      action={deleteVehicle.bind(null, vehicle.id)}
+      message={`Ștergi mașina ${vehicle.make} ${vehicle.model} (${vehicle.plateNumber}) cu toate documentele, costurile și fișierele ei? Acțiunea nu poate fi anulată.`}
+      className="btn-secondary btn-sm btn-danger"
+      title="Șterge mașina"
+    >
+      <Trash2 className="i" />Șterge mașina
+    </ConfirmForm>
   );
 }
 

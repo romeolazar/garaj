@@ -29,7 +29,7 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number][0];
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ car?: string; tab?: string; year?: string; all?: string; error?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ car?: string; tab?: string; year?: string; all?: string; error?: string; deleted?: string }> }) {
   const admins = await prisma.user.count({ where: { role: "ADMIN" } });
   if (admins === 0) redirect("/setup");
 
@@ -43,6 +43,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (!ctx.vehicles.length) {
     return (
       <AppShell active="dashboard">
+        {params.deleted ? <div className="notice ok">Mașina a fost ștearsă.</div> : null}
         <section className="card empty-garage">
           <span className="brand-mark" style={{ width: 64, height: 64 }}><AppLogo id="empty" /></span>
           <h2 style={{ margin: 0 }}>Garajul e gol</h2>
@@ -57,6 +58,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   return (
     <AppShell active="dashboard">
+      {params.deleted ? <div className="notice ok">Mașina a fost ștearsă.</div> : null}
       {params.error ? <div className="notice bad">Formularul nu a fost salvat: verifică câmpurile obligatorii.</div> : null}
       <section className="top-grid">
         <div className="hero">{selected === "all" ? <Segments vehicles={ctx.vehicles} tab={tab} /> : <SingleHero vehicle={cars[0]} ctx={ctx} />}</div>

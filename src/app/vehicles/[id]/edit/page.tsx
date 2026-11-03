@@ -4,7 +4,9 @@ import { getServerSession } from "next-auth";
 import { FuelType } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { updateVehicle } from "@/app/actions";
+import { Trash2 } from "lucide-react";
+import { deleteVehicle, updateVehicle } from "@/app/actions";
+import { ConfirmForm } from "@/components/ui/confirm-form";
 import { AppShell } from "@/components/app-shell";
 import { fuelLabels } from "@/lib/labels";
 
@@ -95,6 +97,23 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
           <button className="btn" type="submit">Salveaza modificarile</button>
         </div>
       </form>
+
+      {session.user.role === "ADMIN" ? (
+        <section className="panel mt-6 flex flex-wrap items-center justify-between gap-4 p-5" style={{ borderColor: "color-mix(in srgb, var(--danger) 40%, var(--border))" }}>
+          <div>
+            <h2 className="text-lg font-black" style={{ color: "var(--danger)" }}>Șterge mașina</h2>
+            <p className="text-sm text-muted-foreground">Se șterg definitiv documentele, costurile, ratele, reviziile, anvelopele și fișierele mașinii.</p>
+          </div>
+          <ConfirmForm
+            action={deleteVehicle.bind(null, vehicle.id)}
+            message={`Ștergi mașina ${vehicle.make} ${vehicle.model} (${vehicle.plateNumber}) cu toate datele ei? Acțiunea nu poate fi anulată.`}
+            className="btn-secondary btn-danger"
+            title="Șterge mașina"
+          >
+            <Trash2 className="i" />Șterge mașina
+          </ConfirmForm>
+        </section>
+      ) : null}
     </AppShell>
   );
 }
