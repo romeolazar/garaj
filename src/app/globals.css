@@ -514,3 +514,4 @@ h1, h2, h3 { font-weight: 700; }
 .danger-box li.zero { color: var(--muted); }
 .danger-confirm { display: grid; gap: 8px; text-align: left; font-size: 13px; font-weight: 600; color: var(--muted); }
 .btn-danger-solid { background: var(--danger); box-shadow: 0 8px 20px -10px var(--danger); }
+.lic-meta .icon-btn { width: 34px; height: 34px; border-radius: 10px; }
