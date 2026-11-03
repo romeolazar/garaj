@@ -175,14 +175,18 @@ async function requireSession() {
 }
 
 // Accepts the .zip archive (garaj.json inside) or a plain .json / .grj backup.
-async function readBackupFile(file: File): Promise<unknown> {
+async function readBackupFile(file: File): Promise<{ payload: unknown; readFile?: (path: string) => Promise<Buffer | null> }> {
   if (/\.zip$/i.test(file.name)) {
     const zip = await JSZip.loadAsync(await file.arrayBuffer());
     const entry = zip.file("garaj.json");
     if (!entry) throw new Error("garaj.json missing");
-    return JSON.parse(await entry.async("string"));
+    const readFile = async (path: string) => {
+      const item = zip.file(path);
+      return item ? Buffer.from(await item.async("uint8array")) : null;
+    };
+    return { payload: JSON.parse(await entry.async("string")), readFile };
   }
-  return JSON.parse(await file.text());
+  return { payload: JSON.parse(await file.text()) };
 }
 
 async function requireAdmin() {
@@ -719,19 +723,18 @@ export async function importJsonData(formData: FormData) {
     redirect("/settings?section=backup&import=missing");
   }
 
-  let payload: unknown;
+  let backup: Awaited<ReturnType<typeof readBackupFile>>;
   try {
-    payload = await readBackupFile(file);
+    backup = await readBackupFile(file);
   } catch {
     redirect("/settings?section=backup&import=invalid");
   }
 
-  const result = await importBackup(payload, currentUser);
+  const result = await importBackup(backup.payload, currentUser, backup.readFile);
   if (!result.vehicles) redirect("/settings?section=backup&import=empty");
 
-  revalidatePath("/");
-    revalidatePath("/alerts");
-  redirect("/settings?section=backup&import=ok");
+  revalidatePath("/", "layout");
+  redirect(`/settings?section=backup&import=ok&files=${result.files}`);
 }
 
 export async function createUser(formData: FormData) {

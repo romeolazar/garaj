@@ -34,7 +34,7 @@ const personFields = {
 
 // Full backup without passwords or the Telegram token. formatVersion 5 adds categories and fuel details.
 export async function backupPayload(categories: Array<CostCategory & { id?: string }>) {
-  const [vehicles, users, settings] = await Promise.all([
+  const [vehicles, users, settings, files] = await Promise.all([
     prisma.vehicle.findMany({
       include: {
         documents: true,
@@ -46,17 +46,20 @@ export async function backupPayload(categories: Array<CostCategory & { id?: stri
       }
     }),
     prisma.user.findMany({ select: personFields }),
-    prisma.appSetting.findUnique({ where: { id: "default" } })
+    prisma.appSetting.findUnique({ where: { id: "default" } }),
+    prisma.fileAttachment.findMany({ include: { user: { select: { email: true } }, vehicle: { select: { plateNumber: true } } }, orderBy: { createdAt: "asc" } })
   ]);
 
   return {
-    formatVersion: 5,
+    formatVersion: 6,
     exportedAt: new Date().toISOString(),
     vehicles: vehicles.map((v) => ({
       ...v,
       expenses: v.expenses.map((e) => ({ ...e, categoryKey: expenseCategoryKey({ ...e } as GarageVehicle["expenses"][number], categories) }))
     })),
     users,
+    // Uploaded files travel in the .zip under fisiere/<path>; owners are matched by email / plate on import.
+    files: files.map((f) => ({ id: f.id, kind: f.kind, path: f.path, originalName: f.originalName, mimeType: f.mimeType, size: f.size, createdAt: f.createdAt, userEmail: f.user?.email ?? null, vehiclePlate: f.vehicle?.plateNumber ?? null })),
     expenseCategories: categories.map(({ key, name, color, icon, sortOrder, isActive }) => ({ key, name, color, icon, sortOrder, isActive })),
     preferences: settings
       ? { theme: settings.theme, dateFormat: settings.dateFormat, notificationsEnabled: settings.notificationsEnabled, notificationTime: settings.notificationTime, highPriorityDays: settings.highPriorityDays, odometerReminderKm: settings.odometerReminderKm }

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { DocumentType, ExpenseCategory, FuelType, PaymentFrequency, PaymentInstallmentStatus, PaymentPlanCategory, PaymentPlanStatus, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { rebuildDocumentReminders } from "@/lib/reminders";
+import { restoreFile } from "@/lib/storage";
 
 function enumValue<T extends Record<string, string>>(values: T, value: string | undefined) {
   return value && Object.values(values).includes(value) ? value : undefined;
@@ -61,10 +62,10 @@ async function randomPasswordHash() {
   return bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
 }
 
-export type ImportResult = { vehicles: number };
+export type ImportResult = { vehicles: number; files: number };
 
 // Restores a backup (formatVersion 1-5). Vehicles with the same plate number are replaced.
-export async function importBackup(payload: unknown, currentUser: { id: string; role: Role }): Promise<ImportResult> {
+export async function importBackup(payload: unknown, currentUser: { id: string; role: Role }, readFile?: (path: string) => Promise<Buffer | null>): Promise<ImportResult> {
   const root = objectValue(payload);
   const usersList = arrayValue(root?.users);
 
@@ -129,7 +130,7 @@ export async function importBackup(payload: unknown, currentUser: { id: string; 
   const vehicles = arrayValue(root?.vehicles);
 
   if (vehicles.length === 0) {
-    return { vehicles: 0 };
+    return { vehicles: 0, files: 0 };
   }
 
   for (const item of vehicles) {
@@ -394,5 +395,33 @@ export async function importBackup(payload: unknown, currentUser: { id: string; 
     }
   }
 
-  return { vehicles: vehicles.length };
+  const files = readFile ? await restoreFiles(arrayValue(root?.files), readFile) : 0;
+  return { vehicles: vehicles.length, files };
+}
+
+// Files keep their id and path, so profile photo links (/api/files/<id>) keep working after a restore.
+async function restoreFiles(items: Array<Record<string, unknown>>, readFile: (path: string) => Promise<Buffer | null>) {
+  let restored = 0;
+  for (const item of items) {
+    const id = stringValue(item.id);
+    const relative = stringValue(item.path);
+    if (!id || !relative) continue;
+    const userEmail = stringValue(item.userEmail)?.toLowerCase();
+    const vehiclePlate = stringValue(item.vehiclePlate)?.toUpperCase();
+    const user = userEmail ? await prisma.user.findUnique({ where: { email: userEmail }, select: { id: true } }) : null;
+    const vehicle = vehiclePlate ? await prisma.vehicle.findUnique({ where: { plateNumber: vehiclePlate }, select: { id: true } }) : null;
+    if (!user && !vehicle) continue;
+    const buffer = await readFile(`fisiere/${relative}`);
+    if (!buffer) continue;
+    try {
+      const { mimeType, size } = await restoreFile(relative, buffer);
+      const data = { kind: stringValue(item.kind) ?? "file", path: relative, originalName: stringValue(item.originalName) ?? relative.split("/").pop()!, mimeType, size, userId: user?.id ?? null, vehicleId: vehicle?.id ?? null };
+      await prisma.fileAttachment.deleteMany({ where: { path: relative, NOT: { id } } });
+      await prisma.fileAttachment.upsert({ where: { id }, update: data, create: { id, ...data } });
+      restored++;
+    } catch (error) {
+      console.error(`[import] Skipped file ${relative}:`, (error as Error).message);
+    }
+  }
+  return restored;
 }

@@ -47,6 +47,17 @@ export async function storeFile({ file, folder, baseName, allow, maxBytes = MAX_
   return { path: relative, mimeType: type.mime, size: buffer.length, originalName: (file.name || name).slice(0, 200) };
 }
 
+// Writes a file from a backup at its original relative path, after checking the path and the real file type.
+export async function restoreFile(relative: string, buffer: Buffer) {
+  if (!relative || relative.includes("\0")) throw new StorageError("Cale invalidă.");
+  const type = TYPES.find((candidate) => candidate.test(buffer));
+  if (!type || buffer.length > MAX_FILE_BYTES) throw new StorageError("Fișier neacceptat.");
+  const absolute = resolveSafe(relative);
+  await fs.mkdir(path.dirname(absolute), { recursive: true });
+  await fs.writeFile(absolute, buffer);
+  return { mimeType: type.mime, size: buffer.length };
+}
+
 export async function readStoredFile(relative: string) {
   return fs.readFile(resolveSafe(relative));
 }

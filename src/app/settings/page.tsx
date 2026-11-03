@@ -29,7 +29,7 @@ const SECTIONS = [
   ["backup", "Backup & export", Archive]
 ] as const;
 
-type Params = { section?: string; saved?: string; telegram?: string; import?: string; error?: string };
+type Params = { section?: string; saved?: string; telegram?: string; import?: string; files?: string; error?: string };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const ctx = await loadGarage();
@@ -67,7 +67,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {section === "categories" ? <Categories categories={ctx.categories} error={params.error} /> : null}
             {section === "reminders" ? <Reminders ctx={ctx} /> : null}
             {section === "telegram" ? <Telegram ctx={ctx} status={params.telegram} /> : null}
-            {section === "backup" ? <Backup status={params.import} /> : null}
+            {section === "backup" ? <Backup status={params.import} files={params.files} /> : null}
           </div>
         </div>
       </section>
@@ -222,9 +222,9 @@ function Telegram({ ctx, status }: { ctx: GarageContext; status?: string }) {
   );
 }
 
-function Backup({ status }: { status?: string }) {
+function Backup({ status, files }: { status?: string; files?: string }) {
   const notices: Record<string, [string, string]> = {
-    ok: ["ok", "Backup-ul a fost importat."],
+    ok: ["ok", `Backup-ul a fost importat${files && files !== "0" ? `, inclusiv ${files === "1" ? "un fișier" : `${files} fișiere`}` : ""}.`],
     missing: ["bad", "Alege un fișier."],
     invalid: ["bad", "Fișierul nu este un backup Garaj valid."],
     empty: ["bad", "Backup-ul nu conține mașini."]
@@ -235,15 +235,15 @@ function Backup({ status }: { status?: string }) {
       <div className="grid2">
         <div className="box">
           <h3><Archive className="i" />Export</h3>
-          <p className="notes" style={{ marginBottom: 14 }}>O singură arhivă <b>.zip</b> cu tot ce e în aplicație: <code>garaj.json</code> (pentru restaurare) și tabele CSV pentru costuri și documente, care se deschid direct în Excel.</p>
+          <p className="notes" style={{ marginBottom: 14 }}>O singură arhivă <b>.zip</b> cu tot ce e în aplicație: <code>garaj.json</code> (pentru restaurare), folderul <code>fisiere/</code> cu toate pozele și documentele încărcate, plus tabele CSV pentru costuri și documente, care se deschid direct în Excel.</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <a className="btn btn-sm" href="/api/export/zip"><Download className="i" />Descarcă arhiva (.zip)</a>
-            <a className="btn-secondary btn-sm" href="/api/export/json">Doar date (.json)</a>
+            <a className="btn-secondary btn-sm" href="/api/export/json" title="Fără poze și fișiere">Doar date (.json)</a>
           </div>
         </div>
         <div className="box">
           <h3><Upload className="i" />Import</h3>
-          <p className="notes" style={{ marginBottom: 14 }}>Restaurează dintr-o arhivă <b>.zip</b> sau dintr-un backup mai vechi <b>.grj / .json</b>. Mașinile existente cu același număr sunt înlocuite cu datele din fișier.</p>
+          <p className="notes" style={{ marginBottom: 14 }}>Restaurează dintr-o arhivă <b>.zip</b> (cu tot cu poze și fișiere) sau dintr-un backup mai vechi <b>.grj / .json</b> (doar date). Mașinile existente cu același număr sunt înlocuite cu datele din fișier.</p>
           <form action={importJsonData} style={{ display: "grid", gap: 10 }}>
             <input className="field" type="file" name="jsonFile" accept=".zip,.json,.grj" required />
             <button className="btn btn-sm" style={{ justifySelf: "start" }}><Upload className="i" />Importă</button>

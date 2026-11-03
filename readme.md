@@ -93,7 +93,7 @@ Modificările de structură ale bazei de date se aplică automat la pornire. Pen
 
 ## Backup și restaurare
 
-**Din aplicație:** în **Setări → Backup & export** descarci o arhivă `.zip` cu toate datele (`garaj.json` pentru restaurare, `costuri.csv` și `documente.csv` pentru Excel) și o poți importa înapoi. Parolele utilizatorilor și tokenul Telegram nu sunt incluse. Conturile create la import primesc o parolă aleatorie, pe care administratorul o schimbă din **Șoferi → Editează**.
+**Din aplicație:** în **Setări → Backup & export** descarci o arhivă `.zip` cu toate datele (`garaj.json` pentru restaurare, folderul `fisiere/` cu pozele și documentele încărcate, `costuri.csv` și `documente.csv` pentru Excel) și o poți importa înapoi, cu tot cu fișiere. Parolele utilizatorilor și tokenul Telegram nu sunt incluse. Conturile create la import primesc o parolă aleatorie, pe care administratorul o schimbă din **Șoferi → Editează**.
 
 **Copie completă a bazei de date:**
 
