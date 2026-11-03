@@ -11,7 +11,7 @@ export function LoginForm() {
 
   return (
     <form
-      className="grid gap-4"
+      className="auth-form"
       onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -26,22 +26,22 @@ export function LoginForm() {
             router.push("/");
             router.refresh();
           } else {
-            setError("Email sau parola incorecta.");
+            setError("Email sau parolă incorectă.");
           }
         });
       }}
     >
       <label>
-        <span className="label">Email</span>
-        <input className="field" name="email" type="email" required />
+        Email
+        <input className="field" name="email" type="email" autoComplete="username" required />
       </label>
       <label>
-        <span className="label">Parola</span>
-        <input className="field" name="password" type="password" required />
+        Parolă
+        <input className="field" name="password" type="password" autoComplete="current-password" required />
       </label>
-      {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+      {error ? <div className="notice bad">{error}</div> : null}
       <button className="btn" disabled={pending} type="submit">
-        {pending ? "Se autentifica..." : "Login"}
+        {pending ? "Se autentifică…" : "Intră în garaj"}
       </button>
     </form>
   );

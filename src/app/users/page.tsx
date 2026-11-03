@@ -4,6 +4,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { createUser, deleteUser } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { LicenseCard } from "@/components/license-card";
+import { ProfilePhotoUpload } from "@/components/profile-photo-upload";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { vehicleInclude } from "@/lib/garage";
@@ -68,6 +69,7 @@ export default async function DriversPage({ searchParams }: { searchParams: Prom
         <div className="grid3">
           {users.map((user) => (
             <LicenseCard key={user.id} driver={user} vehicle={user.vehicles[0] ?? null} highPriorityDays={settings.highPriorityDays}>
+              <ProfilePhotoUpload userId={user.id} hasPhoto={!!user.profileImageUrl} />
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <Link className="btn-secondary btn-sm" href={`/users/${user.id}/edit`}><Pencil className="i" />Editează</Link>
                 {user.id !== session.user.id ? (

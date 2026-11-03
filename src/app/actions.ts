@@ -13,6 +13,7 @@ import { rebuildDocumentReminders } from "@/lib/reminders";
 import { paymentTypes } from "@/lib/labels";
 import { expenseEnumForKey } from "@/lib/cost-categories";
 import { importBackup } from "@/lib/backup-import";
+import { removeStoredFile } from "@/lib/storage";
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -828,6 +829,8 @@ export async function deleteUser(userId: string) {
   if (session.user.role !== "ADMIN" || session.user.id === userId) redirect("/users");
 
   await prisma.vehicle.updateMany({ where: { driverId: userId }, data: { driverId: null } });
+  // Rows cascade with the user; the files on disk have to be removed by hand.
+  for (const file of await prisma.fileAttachment.findMany({ where: { userId } })) await removeStoredFile(file.path);
   await prisma.user.delete({ where: { id: userId } });
   revalidatePath("/users");
 }

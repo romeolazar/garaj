@@ -486,3 +486,19 @@ input.switch:checked { background: var(--accent); }
 input.switch:checked::after { left: 23px; }
 dialog.modal-dialog .modal { width: 100%; max-width: none; }
 dialog.modal-dialog.narrow { max-width: 520px; }
+/* Login / setup */
+.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(60% 50% at 50% 0%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 70%), var(--bg); }
+.auth-card { width: 100%; max-width: 420px; padding: 32px 28px; text-align: center; }
+.auth-logo { width: 88px; height: 88px; margin: 0 auto 14px; filter: drop-shadow(0 14px 24px rgba(91, 75, 245, .45)); }
+.auth-logo svg { width: 100%; height: 100%; display: block; }
+.auth-card h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+.auth-card > p { margin: 6px 0 22px; color: var(--muted); font-size: 14px; }
+.auth-form { display: grid; gap: 14px; text-align: left; }
+.auth-form label { display: grid; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.auth-form .btn { margin-top: 6px; width: 100%; padding: 12px 16px; }
+.photo-upload { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.photo-error { flex-basis: 100%; color: var(--danger); font-size: 12.5px; }
+.profile-head { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+.profile-head .av { width: 96px; height: 96px; font-size: 30px; border-radius: 28px; }
+h1, h2, h3 { font-weight: 700; }
+.auth-card h1, .car-title h1 { font-weight: 800; }

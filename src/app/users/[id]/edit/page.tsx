@@ -6,6 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateUser } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
+import { ProfilePhotoUpload } from "@/components/profile-photo-upload";
+import { Avatar } from "@/components/ui/avatar";
 import { roleLabels } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +47,17 @@ export default async function EditUserPage({
         <Link href="/users" className="btn-secondary">Inapoi la șoferi</Link>
       </div>
 
+      <section className="panel p-5 mb-4">
+        <div className="profile-head" style={{ marginBottom: 0 }}>
+          <Avatar name={user} imageUrl={user.profileImageUrl} />
+          <div>
+            <b>Poza de profil</b>
+            <p className="mb-3 mt-1 text-sm text-muted-foreground">Apare pe cardul de permis, în banner și în colțul aplicației când {user.firstName} e autentificat.</p>
+            <ProfilePhotoUpload userId={user.id} hasPhoto={!!user.profileImageUrl} />
+          </div>
+        </div>
+      </section>
+
       <form action={updateUser.bind(null, user.id)} className="panel grid gap-4 p-5 md:grid-cols-2">
         {errorMessage && (
           <div className="mb-2 rounded-md bg-rose-500/10 p-3 text-sm text-rose-400 border border-rose-500/20 md:col-span-2">
@@ -60,7 +73,7 @@ export default async function EditUserPage({
             {Object.values(Role).map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
           </select>
         </label>
-        <label className="md:col-span-2"><span className="label">Poza profil URL</span><input className="field" name="profileImageUrl" defaultValue={user.profileImageUrl ?? ""} /></label>
+        <label className="md:col-span-2"><span className="label">Sau link către o poză de pe internet</span><input className="field" name="profileImageUrl" defaultValue={user.profileImageUrl ?? ""} /></label>
         <label><span className="label">Categorie permis</span><input className="field" name="licenseCategory" defaultValue={user.licenseCategory ?? ""} /></label>
         <span className="hidden md:block"></span>
         <label><span className="label">Parola noua optionala</span><input className="field" name="password" type="password" minLength={8} autoComplete="new-password" /></label>

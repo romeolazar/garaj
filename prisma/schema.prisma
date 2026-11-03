@@ -105,6 +105,7 @@ model User {
 
   vehicles        Vehicle[] @relation("VehicleDriver")
   createdVehicles Vehicle[] @relation("VehicleCreator")
+  files           FileAttachment[]
 }
 
 model Vehicle {
@@ -145,6 +146,7 @@ model Vehicle {
   paymentPlans          PaymentPlan[]
   services              ServiceRecord[]
   tires                 TireSet[]
+  files                 FileAttachment[]
 }
 
 model VehicleDocument {
@@ -310,4 +312,23 @@ model AppSetting {
   smtpFrom         String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// Uploaded file stored under FILES_DIR (e.g. soferi/romeo-lazar/…, TM76HEY/galerie/2026/11/…).
+model FileAttachment {
+  id           String   @id @default(cuid())
+  kind         String
+  path         String   @unique
+  originalName String
+  mimeType     String
+  size         Int
+  userId       String?
+  vehicleId    String?
+  createdAt    DateTime @default(now())
+
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([vehicleId])
 }

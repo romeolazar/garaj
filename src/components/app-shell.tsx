@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Bell, House, LogOut, SlidersHorizontal, UsersRound } from "lucide-react";
+import { BarChart3, Bell, LogOut, SlidersHorizontal, UsersRound, Warehouse } from "lucide-react";
 import { AppLogo } from "@/components/ui/app-logo";
 import { Avatar } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -13,7 +13,7 @@ export async function AppShell({ children, active }: { children: React.ReactNode
   const alerts = activeAlerts(vehicles, settings, dismissed).length;
 
   const items: Array<[Section, string, string, React.ReactNode, boolean]> = [
-    ["dashboard", "Panou", "/", <House key="h" className="i" />, true],
+    ["dashboard", "Garaj", "/", <Warehouse key="h" className="i" />, true],
     ["alerts", "Alerte", "/alerts", <Bell key="b" className="i" />, true],
     ["reports", "Rapoarte", "/reports", <BarChart3 key="r" className="i" />, true],
     ["drivers", "Șoferi", "/users", <UsersRound key="u" className="i" />, isAdmin],
@@ -23,9 +23,8 @@ export async function AppShell({ children, active }: { children: React.ReactNode
   return (
     <div className="app">
       <header className="topbar">
-        <Link className="brand" href="/">
+        <Link className="brand" href="/" title="Garaj" aria-label="Garaj">
           <span className="brand-mark"><AppLogo id="brand" /></span>
-          Garaj
         </Link>
         <nav className="topnav">
           {items.filter((item) => item[4]).map(([id, label, href, icon]) => (
@@ -37,10 +36,10 @@ export async function AppShell({ children, active }: { children: React.ReactNode
           ))}
         </nav>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="user-chip" title={user.email}>
+          <Link className="user-chip" href="/profile" title={`${user.email} · Profilul meu`}>
             <Avatar name={user} imageUrl={user.profileImageUrl} />
             <span>{user.firstName}</span>
-          </span>
+          </Link>
           <ThemeToggle />
           <Link href="/api/auth/signout" className="icon-btn" title="Deconectare"><LogOut className="i" /></Link>
         </div>
