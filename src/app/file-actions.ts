@@ -44,6 +44,17 @@ export async function uploadProfilePhoto(userId: string, formData: FormData): Pr
   return { ok: true };
 }
 
+// Use a photo from the internet instead of an uploaded one.
+export async function setProfilePhotoLink(userId: string, formData: FormData): Promise<void> {
+  if (!(await canEditUser(userId))) return;
+  const raw = formData.get("profileImageUrl");
+  const link = typeof raw === "string" ? raw.trim() : "";
+  if (link && !/^https?:\/\/\S+$/i.test(link)) return;
+  await removeAvatars(userId);
+  await prisma.user.update({ where: { id: userId }, data: { profileImageUrl: link || null } });
+  revalidatePath("/", "layout");
+}
+
 export async function removeProfilePhoto(userId: string): Promise<UploadResult> {
   if (!(await canEditUser(userId))) return { ok: false, error: "Nu ai voie să schimbi această poză." };
   await removeAvatars(userId);

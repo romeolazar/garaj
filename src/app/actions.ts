@@ -814,7 +814,6 @@ export async function updateUser(userId: string, formData: FormData) {
       firstName,
       lastName,
       role,
-      profileImageUrl: nullableText(formData, "profileImageUrl"),
       licenseCategory: nullableText(formData, "licenseCategory"),
       licenseIssuedAt: nullableDate(formData, "licenseIssuedAt"),
       licenseExpiresAt: nullableDate(formData, "licenseExpiresAt"),

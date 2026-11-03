@@ -5,6 +5,7 @@ import { Role } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateUser } from "@/app/actions";
+import { setProfilePhotoLink } from "@/app/file-actions";
 import { AppShell } from "@/components/app-shell";
 import { ProfilePhotoUpload } from "@/components/profile-photo-upload";
 import { Avatar } from "@/components/ui/avatar";
@@ -54,6 +55,11 @@ export default async function EditUserPage({
             <b>Poza de profil</b>
             <p className="mb-3 mt-1 text-sm text-muted-foreground">Apare pe cardul de permis, în banner și în colțul aplicației când {user.firstName} e autentificat.</p>
             <ProfilePhotoUpload userId={user.id} hasPhoto={!!user.profileImageUrl} />
+            <form action={setProfilePhotoLink.bind(null, user.id)} className="mt-4 flex flex-wrap items-end gap-2">
+              <label className="min-w-64 flex-1"><span className="label">Sau link către o poză de pe internet</span><input className="field" name="profileImageUrl" type="url" placeholder="https://…" defaultValue={user.profileImageUrl?.startsWith("http") ? user.profileImageUrl : ""} /></label>
+              <button className="btn-secondary btn-sm" type="submit">Folosește link-ul</button>
+            </form>
+            <p className="mt-2 text-xs text-muted-foreground">Poza se salvează imediat; butonul „Salvează șofer” de mai jos nu o modifică.</p>
           </div>
         </div>
       </section>
@@ -73,7 +79,6 @@ export default async function EditUserPage({
             {Object.values(Role).map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
           </select>
         </label>
-        <label className="md:col-span-2"><span className="label">Sau link către o poză de pe internet</span><input className="field" name="profileImageUrl" defaultValue={user.profileImageUrl ?? ""} /></label>
         <label><span className="label">Categorie permis</span><input className="field" name="licenseCategory" defaultValue={user.licenseCategory ?? ""} /></label>
         <span className="hidden md:block"></span>
         <label><span className="label">Parola noua optionala</span><input className="field" name="password" type="password" minLength={8} autoComplete="new-password" /></label>
