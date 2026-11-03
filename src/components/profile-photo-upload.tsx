@@ -35,8 +35,14 @@ export function ProfilePhotoUpload({ userId, hasPhoto }: { userId: string; hasPh
       }
       const data = new FormData();
       data.append("photo", new File([blob], "profil.jpg", { type: "image/jpeg" }));
-      const result = await uploadProfilePhoto(userId, data);
-      if (!result.ok) setError(result.error);
+      try {
+        const result = await uploadProfilePhoto(userId, data);
+        if (!result.ok) setError(result.error);
+      } catch (err) {
+        // e.g. the server rejected the request (proxy/origin) or could not write to /app/data
+        setError(`Poza nu a putut fi salvată pe server${err instanceof Error && err.message ? `: ${err.message}` : "."}`);
+        console.error("[photo] upload failed", err);
+      }
       router.refresh();
     });
   };
@@ -53,7 +59,17 @@ export function ProfilePhotoUpload({ userId, hasPhoto }: { userId: string; hasPh
           className="icon-sm"
           title="Șterge poza"
           disabled={pending}
-          onClick={() => startTransition(async () => { await removeProfilePhoto(userId); router.refresh(); })}
+          onClick={() => startTransition(async () => {
+            setError(null);
+            try {
+              const result = await removeProfilePhoto(userId);
+              if (!result.ok) setError(result.error);
+            } catch (err) {
+              setError(`Poza nu a putut fi ștearsă${err instanceof Error && err.message ? `: ${err.message}` : "."}`);
+              console.error("[photo] remove failed", err);
+            }
+            router.refresh();
+          })}
         >
           <Trash2 className="i" style={{ width: 14, height: 14 }} />
         </button>

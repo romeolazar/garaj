@@ -35,7 +35,9 @@ export async function uploadProfilePhoto(userId: string, formData: FormData): Pr
     await prisma.user.update({ where: { id: userId }, data: { profileImageUrl: `/api/files/${attachment.id}` } });
   } catch (error) {
     if (error instanceof StorageError) return { ok: false, error: error.message };
-    throw error;
+    // Most often the data volume is not writable; report it instead of failing silently.
+    console.error("[photo] could not store profile photo:", error);
+    return { ok: false, error: "Serverul nu a putut salva fișierul (verifică drepturile de scriere pe volumul /app/data)." };
   }
 
   revalidatePath("/", "layout");
