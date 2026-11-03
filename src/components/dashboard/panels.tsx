@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Battery, Car, Check, FileText, Pencil, RotateCcw, Settings, ShieldCheck, Trash2, TrendingUp, Upload } from "lucide-react";
+import { Battery, Car, Check, FileText, Pencil, RotateCcw, Settings, ShieldCheck, TrendingUp, Upload } from "lucide-react";
 import { deleteVehicle, markInstallmentPaid, markInstallmentUnpaid } from "@/app/actions";
 import { toggleVehicleReminders } from "@/app/settings-actions";
 import { CostBars, monthBuckets, OdometerLine, type MonthBucket } from "@/components/dashboard/charts";
@@ -19,7 +19,7 @@ import {
 import { FuelImport } from "@/components/dashboard/fuel-import";
 import { LicenseCard } from "@/components/license-card";
 import { CatBadge } from "@/components/ui/icons";
-import { ConfirmForm } from "@/components/ui/confirm-form";
+import { DeleteCarDialog } from "@/components/delete-car-dialog";
 import {
   ALERT_DOCUMENT_TYPES,
   categoryFor,
@@ -560,7 +560,7 @@ export function CarSettingsPanel(props: PanelProps) {
               {ctx.isAdmin ? (
                 <div className="ios-row">
                   <div className="grow">Șterge mașina<small>Se șterg și documentele, costurile, fișierele și istoricul</small></div>
-                  <DeleteCarButton vehicle={v} />
+                  <DeleteCarButton vehicle={v} iconOnly />
                 </div>
               ) : null}
             </div>
@@ -571,16 +571,14 @@ export function CarSettingsPanel(props: PanelProps) {
   );
 }
 
-export function DeleteCarButton({ vehicle }: { vehicle: GarageVehicle }) {
+export function DeleteCarButton({ vehicle, iconOnly = false }: { vehicle: GarageVehicle; iconOnly?: boolean }) {
   return (
-    <ConfirmForm
+    <DeleteCarDialog
       action={deleteVehicle.bind(null, vehicle.id)}
-      message={`Ștergi mașina ${vehicle.make} ${vehicle.model} (${vehicle.plateNumber}) cu toate documentele, costurile și fișierele ei? Acțiunea nu poate fi anulată.`}
-      className="btn-secondary btn-sm btn-danger"
-      title="Șterge mașina"
-    >
-      <Trash2 className="i" />Șterge mașina
-    </ConfirmForm>
+      car={vehicle}
+      iconOnly={iconOnly}
+      counts={{ documents: vehicle.documents.length, costs: vehicle.expenses.length, services: vehicle.services.length, tires: vehicle.tires.length, plans: vehicle.paymentPlans.length, files: vehicle._count.files }}
+    />
   );
 }
 

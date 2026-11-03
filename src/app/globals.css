@@ -502,3 +502,15 @@ dialog.modal-dialog.narrow { max-width: 520px; }
 .profile-head .av { width: 96px; height: 96px; font-size: 30px; border-radius: 28px; }
 h1, h2, h3 { font-weight: 700; }
 .auth-card h1, .car-title h1 { font-weight: 800; }
+/* Delete-car warning */
+.danger-icon { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); cursor: pointer; }
+.danger-icon:hover { background: var(--danger-soft); }
+.danger-modal { text-align: center; }
+.danger-head { width: 56px; height: 56px; border-radius: 18px; margin: 0 auto 12px; display: grid; place-items: center; background: var(--danger-soft); color: var(--danger); }
+.danger-head svg { width: 28px; height: 28px; }
+.danger-box { text-align: left; padding: 14px 16px; border-radius: 14px; background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); color: var(--text); font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; }
+.danger-box b { color: var(--danger); }
+.danger-box ul { margin: 8px 0 10px; padding-left: 20px; }
+.danger-box li.zero { color: var(--muted); }
+.danger-confirm { display: grid; gap: 8px; text-align: left; font-size: 13px; font-weight: 600; color: var(--muted); }
+.btn-danger-solid { background: var(--danger); box-shadow: 0 8px 20px -10px var(--danger); }

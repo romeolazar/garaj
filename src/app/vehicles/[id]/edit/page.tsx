@@ -4,9 +4,8 @@ import { getServerSession } from "next-auth";
 import { FuelType } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Trash2 } from "lucide-react";
 import { deleteVehicle, updateVehicle } from "@/app/actions";
-import { ConfirmForm } from "@/components/ui/confirm-form";
+import { DeleteCarDialog } from "@/components/delete-car-dialog";
 import { AppShell } from "@/components/app-shell";
 import { fuelLabels } from "@/lib/labels";
 
@@ -24,6 +23,16 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
 
   if (!vehicle) notFound();
   if (session.user.role !== "ADMIN" && vehicle.driverId !== session.user.id) notFound();
+
+  const [documents, costs, services, tires, plans, files] = await Promise.all([
+    prisma.vehicleDocument.count({ where: { vehicleId: vehicle.id } }),
+    prisma.expense.count({ where: { vehicleId: vehicle.id } }),
+    prisma.serviceRecord.count({ where: { vehicleId: vehicle.id } }),
+    prisma.tireSet.count({ where: { vehicleId: vehicle.id } }),
+    prisma.paymentPlan.count({ where: { vehicleId: vehicle.id } }),
+    prisma.fileAttachment.count({ where: { vehicleId: vehicle.id } })
+  ]);
+  const counts = { documents, costs, services, tires, plans, files };
 
   return (
     <AppShell>
@@ -104,14 +113,7 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
             <h2 className="text-lg font-black" style={{ color: "var(--danger)" }}>Șterge mașina</h2>
             <p className="text-sm text-muted-foreground">Se șterg definitiv documentele, costurile, ratele, reviziile, anvelopele și fișierele mașinii.</p>
           </div>
-          <ConfirmForm
-            action={deleteVehicle.bind(null, vehicle.id)}
-            message={`Ștergi mașina ${vehicle.make} ${vehicle.model} (${vehicle.plateNumber}) cu toate datele ei? Acțiunea nu poate fi anulată.`}
-            className="btn-secondary btn-danger"
-            title="Șterge mașina"
-          >
-            <Trash2 className="i" />Șterge mașina
-          </ConfirmForm>
+          <DeleteCarDialog action={deleteVehicle.bind(null, vehicle.id)} car={vehicle} counts={counts} />
         </section>
       ) : null}
     </AppShell>

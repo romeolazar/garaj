@@ -8,7 +8,8 @@ export const vehicleInclude = {
   expenses: true,
   services: true,
   tires: true,
-  paymentPlans: { include: { installments: { orderBy: { installmentNumber: "asc" } } } }
+  paymentPlans: { include: { installments: { orderBy: { installmentNumber: "asc" } } } },
+  _count: { select: { files: true } }
 } satisfies Prisma.VehicleInclude;
 
 export type GarageVehicle = Prisma.VehicleGetPayload<{ include: typeof vehicleInclude }>;
